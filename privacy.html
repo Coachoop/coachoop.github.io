@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coachoop - Privacy Policy / מדיניות פרטיות</title>
+<style>
+    :root {
+        --primary: #ff6b00;
+        --primary-dark: #cc5600;
+        --bg-dark: #121824;
+        --card-bg: #1e293b;
+        --text-light: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        background-color: var(--bg-dark);
+        color: var(--text-light);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.7;
+        padding: 20px;
+    }
+    .container {
+        max-width: 760px;
+        margin: 0 auto;
+    }
+    header {
+        text-align: center;
+        padding: 20px 0 30px;
+        border-bottom: 2px solid var(--primary);
+        margin-bottom: 30px;
+    }
+    header h1 {
+        color: var(--primary);
+        font-size: 1.8rem;
+    }
+    header p {
+        color: var(--text-muted);
+        margin-top: 6px;
+    }
+    section {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    h2 {
+        color: var(--primary);
+        font-size: 1.2rem;
+        margin-bottom: 10px;
+    }
+    h3 {
+        color: var(--text-light);
+        font-size: 1rem;
+        margin: 14px 0 6px;
+    }
+    p, li {
+        color: #cbd5e1;
+        font-size: 0.96rem;
+    }
+    ul {
+        padding-inline-start: 22px;
+        margin: 8px 0;
+    }
+    li { margin-bottom: 6px; }
+    a { color: #38bdf8; }
+    .lang-divider {
+        text-align: center;
+        margin: 40px 0 30px;
+        padding: 14px;
+        border-top: 2px dashed var(--border-color);
+        border-bottom: 2px dashed var(--border-color);
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+    .hebrew {
+        direction: rtl;
+        text-align: right;
+    }
+    .updated {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        text-align: center;
+        margin-top: 6px;
+    }
+    footer {
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        padding: 30px 0 10px;
+    }
+</style>
+</head>
+<body>
+<div class="container">
+
+    <header>
+        <h1>🏀 Coachoop</h1>
+        <p>Privacy Policy — English version below, Hebrew version further down (מדיניות הפרטיות בעברית בהמשך הדף)</p>
+        <p class="updated">Last updated: August 9, 2026</p>
+    </header>
+
+    <!-- ============================= ENGLISH ============================= -->
+
+    <section>
+        <h2>1. Who we are</h2>
+        <p>Coachoop is a web application that helps basketball coaches manage their teams: scheduling practices, tracking a roster of players, building practice drills with a tactical drawing board, and optionally syncing practice schedules to the coach's personal Google Calendar. Coachoop is developed and operated by an independent developer (contact details in Section 9).</p>
+    </section>
+
+    <section>
+        <h2>2. Information we collect</h2>
+        <h3>a) Account information</h3>
+        <p>When you sign up, we collect your email address and, if you sign in with Google, your name and profile picture as provided by Google. Authentication is handled by Firebase Authentication (a Google Cloud service).</p>
+        <h3>b) Content you create in the app</h3>
+        <ul>
+            <li>Team names, colors, and settings you create.</li>
+            <li>Player roster information you choose to enter, which may include player names, parent/guardian contact details, and personal notes about a player that you add.</li>
+            <li>Practice schedules, recurring practice rules, drills, and tactical board drawings you create.</li>
+            <li>Free-text notes you write about your team.</li>
+        </ul>
+        <p>This information is entered directly by the coach using the app (you). It is not collected from or shown to players or parents through Coachoop; the app has no separate login for players or parents.</p>
+        <h3>c) Google Calendar data (only if you choose to connect it)</h3>
+        <p>If you choose to connect your Google Calendar from the app's Account Settings screen, Coachoop requests the <code>https://www.googleapis.com/auth/calendar.events</code> scope. This is used exclusively to:</p>
+        <ul>
+            <li>Create, update, and delete calendar events on your own primary Google Calendar that correspond to practices, recurring practice rules, and blocked/holiday dates you manage inside Coachoop.</li>
+        </ul>
+        <p>Coachoop does <strong>not</strong> read, browse, or store the content of your existing calendar events that are unrelated to Coachoop-created practices. Coachoop does not share your Google Calendar data with any third party, and does not use it for advertising or profiling of any kind.</p>
+    </section>
+
+    <section>
+        <h2>3. How we use your information</h2>
+        <ul>
+            <li>To provide the core functionality of the app: displaying your teams, players, schedules, and drills back to you.</li>
+            <li>To optionally keep your personal Google Calendar in sync with the practice schedule you manage in Coachoop, only if you explicitly connect it.</li>
+            <li>To authenticate you and keep your data private to your account (or, for users with an administrator role, to the teams they are permitted to manage).</li>
+        </ul>
+        <p>We do not use your data for advertising, and we do not sell or rent your data to third parties.</p>
+    </section>
+
+    <section>
+        <h2>4. Where your data is stored</h2>
+        <p>All app data (teams, players, practices, notes) is stored using Firebase Authentication and Firebase Cloud Firestore, both Google Cloud services. Access to your data is restricted to your own account (coaches can only see the teams they own; app administrators, if any, may have broader access to support the service).</p>
+    </section>
+
+    <section>
+        <h2>5. Google API Services User Data compliance</h2>
+        <p>Coachoop's use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">Google API Services User Data Policy</a>, including the Limited Use requirements. Calendar data accessed through Google Calendar is used solely to provide the practice-sync feature described in Section 2(c) above, is not transferred to any third party, and is not used for any advertising purpose.</p>
+    </section>
+
+    <section>
+        <h2>6. Data retention and deletion</h2>
+        <p>Your data is retained for as long as your account is active. You may disconnect your Google Calendar at any time from the app's Account Settings screen ("Disable automatic connection"), which stops any further calendar access. To request full deletion of your account and all associated data, contact us using the details in Section 9 below.</p>
+    </section>
+
+    <section>
+        <h2>7. Children's privacy</h2>
+        <p>Coachoop is intended for use by adult coaches and is not directed at children. While a coach may enter a player's name and a parent/guardian's contact details as part of managing their roster, this information is entered by the coach (an adult), and children do not directly access, log into, or use the Coachoop application themselves.</p>
+    </section>
+
+    <section>
+        <h2>8. Security</h2>
+        <p>All communication between your browser and our servers is encrypted using HTTPS. Authentication is handled by Firebase Authentication, and data storage uses Firebase Cloud Firestore's built-in access controls.</p>
+    </section>
+
+    <section>
+        <h2>9. Contact us</h2>
+        <p>If you have questions about this Privacy Policy, or wish to request deletion of your data, please contact:</p>
+        <p><strong>Email:</strong> haim.binyamini@gmail.com</p>
+    </section>
+
+    <section>
+        <h2>10. Changes to this policy</h2>
+        <p>We may update this Privacy Policy from time to time. Material changes will be reflected by an updated "Last updated" date at the top of this page.</p>
+    </section>
+
+    <div class="lang-divider">⬇ בעברית ⬇</div>
+
+    <!-- ============================= HEBREW ============================= -->
+
+    <section class="hebrew">
+        <h2>1. מי אנחנו</h2>
+        <p>Coachoop היא אפליקציית אינטרנט שעוזרת למאמני כדורסל לנהל את הקבוצות שלהם: תזמון אימונים, ניהול סגל שחקנים, בניית תרגילי אימון עם לוח שרטוט טקטי, ואפשרות לסנכרן את לוח האימונים ליומן ה-Google האישי של המאמן. Coachoop מפותחת ומופעלת על ידי מפתח עצמאי (פרטי קשר בסעיף 9).</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>2. המידע שאנו אוספים</h2>
+        <h3>א. פרטי חשבון</h3>
+        <p>בעת ההרשמה, אנו אוספים את כתובת האימייל שלך, ואם אתה מתחבר עם Google - גם את שמך ותמונת הפרופיל שלך כפי שמסופקים על ידי Google. האימות מנוהל באמצעות Firebase Authentication (שירות של Google Cloud).</p>
+        <h3>ב. תוכן שאתה יוצר באפליקציה</h3>
+        <ul>
+            <li>שמות קבוצות, צבעים והגדרות שאתה יוצר.</li>
+            <li>פרטי סגל שחקנים שאתה בוחר להזין, שעשויים לכלול שמות שחקנים, פרטי קשר של הורים/אפוטרופוסים, והערות אישיות שאתה מוסיף על שחקן.</li>
+            <li>לוחות אימונים, כללי אימונים קבועים, תרגילים ושרטוטים בלוח הטקטי שאתה יוצר.</li>
+            <li>הערות טקסט חופשי שאתה כותב על הקבוצה שלך.</li>
+        </ul>
+        <p>המידע הזה מוזן ישירות על ידי המאמן המשתמש באפליקציה (אתה). הוא לא נאסף מהשחקנים או ההורים ולא מוצג להם דרך Coachoop; לאפליקציה אין התחברות נפרדת לשחקנים או הורים.</p>
+        <h3>ג. נתוני Google Calendar (רק אם תבחר לחבר)</h3>
+        <p>אם תבחר לחבר את יומן ה-Google שלך ממסך "הגדרות חשבון" באפליקציה, Coachoop מבקשת את ההרשאה <code>https://www.googleapis.com/auth/calendar.events</code>. הרשאה זו משמשת אך ורק כדי:</p>
+        <ul>
+            <li>ליצור, לעדכן ולמחוק אירועים ביומן ה-Google הראשי שלך, בהתאמה לאימונים, כללי אימונים קבועים, ותאריכים חסומים/חגים שאתה מנהל בתוך Coachoop.</li>
+        </ul>
+        <p>Coachoop <strong>לא</strong> קוראת, גולשת, או שומרת תוכן של אירועים קיימים ביומן שלך שאינם קשורים לאימונים שנוצרו על ידי Coachoop. Coachoop לא משתפת את נתוני היומן שלך עם צד שלישי כלשהו, ולא משתמשת בהם לפרסום או פרופיילינג מכל סוג.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>3. כיצד אנו משתמשים במידע שלך</h2>
+        <ul>
+            <li>כדי לספק את הפונקציונליות המרכזית של האפליקציה: הצגת הקבוצות, השחקנים, הלוחות והתרגילים שלך בחזרה אליך.</li>
+            <li>כדי לשמור, באופן אופציונלי, על סנכרון בין יומן ה-Google האישי שלך ללוח האימונים שאתה מנהל ב-Coachoop, רק אם בחרת לחבר אותו במפורש.</li>
+            <li>כדי לאמת את זהותך ולשמור שהמידע שלך פרטי לחשבון שלך (או, עבור משתמשים עם הרשאת מנהל, לקבוצות שהם מורשים לנהל).</li>
+        </ul>
+        <p>אנחנו לא משתמשים במידע שלך לפרסום, ולא מוכרים או משכירים את המידע שלך לצדדים שלישיים.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>4. היכן המידע שלך מאוחסן</h2>
+        <p>כל המידע באפליקציה (קבוצות, שחקנים, אימונים, הערות) מאוחסן באמצעות Firebase Authentication ו-Firebase Cloud Firestore, שני שירותים של Google Cloud. הגישה למידע שלך מוגבלת לחשבון שלך (מאמנים רואים רק את הקבוצות שבבעלותם; מנהלי מערכת, אם קיימים, עשויים להיות בעלי גישה רחבה יותר לצורך תמיכה בשירות).</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>5. עמידה במדיניות Google API Services User Data</h2>
+        <p>השימוש וההעברה של מידע שמתקבל מ-Google APIs על ידי Coachoop עומדים ב<a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener">מדיניות Google API Services User Data</a>, לרבות דרישות ה-Limited Use. נתוני יומן שנגישים דרך Google Calendar משמשים אך ורק לצורך תכונת סנכרון האימונים המתוארת בסעיף 2(ג) לעיל, לא מועברים לשום צד שלישי, ולא משמשים למטרות פרסום כלשהן.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>6. שמירת מידע ומחיקתו</h2>
+        <p>המידע שלך נשמר כל עוד החשבון שלך פעיל. ניתן לנתק את יומן ה-Google בכל עת ממסך "הגדרות חשבון" באפליקציה ("בטל התחברות אוטומטית") - פעולה זו עוצרת כל גישה נוספת ליומן. לבקשת מחיקה מלאה של החשבון וכל המידע הקשור אליו, צור קשר בפרטים שבסעיף 9 להלן.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>7. פרטיות ילדים</h2>
+        <p>Coachoop מיועדת לשימוש על ידי מאמנים בגירים ואינה מיועדת לילדים. למרות שמאמן עשוי להזין שם של שחקן ופרטי קשר של הורה/אפוטרופוס כחלק מניהול הסגל שלו, המידע הזה מוזן על ידי המאמן (בגיר), וילדים אינם ניגשים, מתחברים או משתמשים באפליקציית Coachoop בעצמם באופן ישיר.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>8. אבטחה</h2>
+        <p>כל התקשורת בין הדפדפן שלך לשרתים שלנו מוצפנת באמצעות HTTPS. האימות מנוהל באמצעות Firebase Authentication, ואחסון המידע משתמש בבקרות הגישה המובנות של Firebase Cloud Firestore.</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>9. צור קשר</h2>
+        <p>אם יש לך שאלות לגבי מדיניות פרטיות זו, או שברצונך לבקש מחיקת המידע שלך, אנא צור קשר:</p>
+        <p><strong>אימייל:</strong> haim.binyamini@gmail.com</p>
+    </section>
+
+    <section class="hebrew">
+        <h2>10. שינויים במדיניות זו</h2>
+        <p>אנו עשויים לעדכן מדיניות פרטיות זו מעת לעת. שינויים מהותיים ישתקפו על ידי עדכון תאריך "עודכן לאחרונה" בראש עמוד זה.</p>
+    </section>
+
+    <footer>
+        Coachoop &middot; coachoop.github.io
+    </footer>
+
+</div>
+</body>
+</html>
