@@ -1283,13 +1283,11 @@
             hideAuthError();
             document.getElementById('btn-google').disabled = true;
             try {
+                // רק התחברות בסיסית (שם/אימייל) - בלי בקשת הרשאת יומן (scope רגיש).
+                // ככה "התחבר עם Google" נשאר תמיד נקי, בלי מסך אזהרה, בלי תלות באימות מול גוגל.
+                // חיבור היומן עצמו קורה בנפרד, דרך GIS, רק כשלוחצים "חבר יומן Google" בהגדרות.
                 const provider = new firebase.auth.GoogleAuthProvider();
-                provider.addScope(GOOGLE_CALENDAR_SCOPE);
                 const result = await auth.signInWithPopup(provider);
-                const credential = firebase.auth.GoogleAuthProvider.credentialFromResult(result);
-                if (credential && credential.accessToken) {
-                    googleCalendarAccessToken = credential.accessToken;
-                }
             } catch (e) {
                 if (e.code !== 'auth/popup-closed-by-user') {
                     showAuthError(translateAuthError(e));
