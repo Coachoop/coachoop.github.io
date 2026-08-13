@@ -661,7 +661,14 @@
         <div id="view-teams-list" class="view">
             <h2>בחר קבוצה / הגדר קבוצה חדשה</h2>
             <div id="admin-mode-notice" class="info-box" style="display:none;">
-                🛡️ מצב מנהל: אתה רואה את כל הקבוצות של כל המאמנים במערכת.
+                🛡️ מצב מנהל: אתה יכול לראות את הקבוצות שלך בלבד או את כל הקבוצות במערכת.
+            </div>
+
+            <div id="admin-teams-filter" class="card" style="display:none; padding:10px; margin-bottom:15px;">
+                <div style="display:flex; gap:10px;">
+                    <button class="court-type-btn selected" id="admin-filter-mine-btn" style="flex:1;" onclick="setAdminTeamsFilter('mine')">📋 רק הקבוצות שלי</button>
+                    <button class="court-type-btn" id="admin-filter-all-btn" style="flex:1;" onclick="setAdminTeamsFilter('all')">🌐 כל הקבוצות במערכת</button>
+                </div>
             </div>
 
             <div id="invite-coach-card" class="card" style="display:none;">
@@ -1224,6 +1231,8 @@
         let currentUser = null;
         let currentUserRole = 'coach';
         let unsubscribeTeamsListener = null;
+        // עבור admin בלבד: 'mine' = רק הקבוצות שלי, 'all' = כל הקבוצות במערכת. ברירת מחדל: mine.
+        let adminTeamsFilter = 'mine';
 
         let currentDate = new Date();
         let globalCalDate = new Date();
@@ -1743,7 +1752,8 @@
                 currentUser.email + (currentUserRole === 'admin' ? ' 🛡️ מנהל' : '');
             document.getElementById('header-user-info').style.display = 'flex';
             document.getElementById('admin-mode-notice').style.display = currentUserRole === 'admin' ? 'block' : 'none';
-            document.getElementById('invite-coach-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
+            document.getElementById('admin-teams-filter').style.display = currentUserRole === 'admin' ? 'block' : 'none';
+            document.getElementById('invite-coach-card').style.display = 'block';
             document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
 
             subscribeToTeams();
@@ -1831,9 +1841,10 @@
             if (unsubscribeTeamsListener) unsubscribeTeamsListener();
 
             let query;
-            if (currentUserRole === 'admin') {
+            if (currentUserRole === 'admin' && adminTeamsFilter === 'all') {
                 query = db.collection('teams');
             } else {
+                // ברירת מחדל: גם עבור admin וגם עבור מאמן רגיל - רק הקבוצות שהמשתמש בעל שלהן
                 query = db.collection('teams').where('ownerId', '==', currentUser.uid);
             }
 
@@ -1852,6 +1863,18 @@
             }, (err) => {
                 console.error('שגיאה בטעינת קבוצות:', err);
             });
+        }
+
+        // --- מעבר בין 'רק שלי' ל'כל הקבוצות' (admin בלבד) ---
+        function setAdminTeamsFilter(mode) {
+            if (currentUserRole !== 'admin') return;
+            adminTeamsFilter = mode;
+
+            document.getElementById('admin-filter-mine-btn').classList.toggle('selected', mode === 'mine');
+            document.getElementById('admin-filter-all-btn').classList.toggle('selected', mode === 'all');
+
+            logAppEvent('admin_teams_filter_change', { mode: mode });
+            subscribeToTeams();
         }
 
         async function saveTeamToFirestore(team) {
