@@ -25,9 +25,40 @@
     }
     .wrap { max-width: 820px; margin: 0 auto; padding: 20px; }
 
+    .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: var(--bg-dark);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+    }
+    .topbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .topbar-brand img {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+    }
+    .topbar-brand span {
+        color: var(--primary);
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    .topbar .btn {
+        padding: 8px 18px;
+        font-size: 0.95rem;
+    }
+
     header.hero {
         text-align: center;
-        padding: 50px 20px 40px;
+        padding: 40px 20px 40px;
     }
     header.hero img {
         width: 96px;
@@ -115,6 +146,14 @@
 </head>
 <body>
 
+<div class="topbar">
+    <div class="topbar-brand">
+        <img src="icon-192.png" alt="Coachoop logo">
+        <span>Coachoop</span>
+    </div>
+    <a class="btn" href="./app.html">כניסה לאפליקציה</a>
+</div>
+
 <div class="wrap">
 
     <header class="hero">
@@ -124,7 +163,6 @@
         <p class="tagline-en">Coachoop is a scheduling and team-management app for basketball coaches: practice calendar, player roster, tactical drawing board, and optional Google Calendar sync.</p>
         <div class="cta-row">
             <a class="btn" href="./app.html">כניסה לאפליקציה</a>
-            <a class="btn btn-secondary" href="./privacy.html">מדיניות פרטיות</a>
         </div>
     </header>
 

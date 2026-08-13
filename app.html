@@ -606,6 +606,7 @@
             <span id="active-team-name" class="active-team-badge" style="display:none;">אין קבוצה נבחרת</span>
             <button class="btn-header" onclick="showView('view-teams-list')">רשימת קבוצות</button>
             <button class="btn-header" onclick="showView('view-account-settings')">⚙️ הגדרות</button>
+            <button class="btn-header" onclick="openFeedbackModal()">💡 הצעות ומשוב</button>
             <button class="btn-header" onclick="handleLogout()">התנתק</button>
         </div>
     </header>
@@ -754,6 +755,16 @@
                     אחרי החיבור הראשון, Coachoop יתחבר ליומן שלך <strong>אוטומטית</strong> בכל פעם שתפתח את האפליקציה במכשיר הזה (ייתכן הבזק קצר של טעינה בכניסה). מופיע רק ביומן שלך - לא של הורים/שחקנים. החיבור חל על כל הקבוצות שלך יחד, לא רק על קבוצה מסוימת.
                 </p>
                 <button class="btn btn-secondary" style="margin-top:10px; font-size:0.8rem; padding:6px 12px;" onclick="disconnectGoogleCalendarAutoConnect()">בטל התחברות אוטומטית</button>
+            </div>
+
+            <div id="admin-feedback-card" class="card" style="margin-bottom:15px; padding:14px; display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <strong>💡 הצעות ומשוב שהתקבלו</strong>
+                    <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="loadAdminFeedback()">🔄 רענן</button>
+                </div>
+                <div id="admin-feedback-list">
+                    <p style="color:var(--text-muted); font-size:0.85rem;">לחץ "רענן" כדי לטעון פניות.</p>
+                </div>
             </div>
         </div>
 
@@ -950,6 +961,10 @@
                     <label>הערות ודגשים לאימון/תרגיל:</label>
                     <textarea id="practice-notes-input" placeholder="רשום הערות, תרגילים, מטרות..."></textarea>
                 </div>
+                <div class="form-group">
+                    <label>🎥 קישור וידאו כללי לאימון (YouTube / Facebook / Instagram):</label>
+                    <input type="url" id="practice-video-input" placeholder="הדבק כאן קישור לסרטון הדגמה כללי לאימון">
+                </div>
             </div>
 
             <div class="card" style="margin-top:15px;">
@@ -974,6 +989,10 @@
                 <div class="form-group">
                     <label>שם התרגיל:</label>
                     <input type="text" id="exercise-title-input" placeholder="למשל: ריצת חימום / תרגיל 2 נגד 1">
+                </div>
+                <div class="form-group">
+                    <label>🎥 קישור וידאו להדגמה (YouTube / Facebook / Instagram):</label>
+                    <input type="url" id="exercise-video-input" placeholder="הדבק כאן קישור לסרטון הדגמה">
                 </div>
                 <label>סוג מגרש:</label>
                 <div style="display: flex; gap: 10px; margin: 8px 0 0 0;">
@@ -1148,6 +1167,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
     <!-- Google Identity Services: משמש עבור חיבור יומן Google בלבד (לא להתחברות הבסיסית לאפליקציה).
          עובד ישירות מול גוגל בלי תלות ב-authDomain של Firebase, ולכן אמין גם כשהאתר מתארח
          בדומיין שונה (כמו GitHub Pages) מזה של פרויקט ה-Firebase. -->
@@ -1163,12 +1183,37 @@
           projectId: "coachoop-62dbf",
           storageBucket: "coachoop-62dbf.firebasestorage.app",
           messagingSenderId: "26688648277",
-          appId: "1:26688648277:web:b651148ebe9baeda4b10dc"
+          appId: "1:26688648277:web:b651148ebe9baeda4b10dc",
+          measurementId: "G-Q9DD0EQNX0"
         };
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
+
+        // ========================================================
+        // Analytics - עוטף ב-try/catch כי בלי measurementId זה עלול להיכשל בשקט,
+        // ולא רוצים שזה יפיל את שאר האפליקציה.
+        // ========================================================
+        let analytics = null;
+        try {
+            if (firebaseConfig.measurementId) {
+                analytics = firebase.analytics();
+            }
+        } catch (e) {
+            console.warn('Firebase Analytics לא זמין:', e);
+        }
+
+        // עטיפה נוחה לרישום אירועים - בטוחה גם אם analytics לא אותחל
+        function logAppEvent(eventName, params = {}) {
+            try {
+                if (analytics) {
+                    analytics.logEvent(eventName, params);
+                }
+            } catch (e) {
+                console.warn('שגיאה ברישום אירוע Analytics:', eventName, e);
+            }
+        }
 
         // --- מבנה נתונים ראשי (בזיכרון, מסונכרן עם Firestore) ---
         let appState = {
@@ -1258,6 +1303,7 @@
             document.getElementById('btn-login').disabled = true;
             try {
                 await auth.signInWithEmailAndPassword(email, password);
+                logAppEvent('login', { method: 'email' });
             } catch (e) {
                 showAuthError(translateAuthError(e));
             }
@@ -1273,6 +1319,7 @@
             document.getElementById('btn-signup').disabled = true;
             try {
                 await auth.createUserWithEmailAndPassword(email, password);
+                logAppEvent('sign_up', { method: 'email' });
             } catch (e) {
                 showAuthError(translateAuthError(e));
             }
@@ -1288,6 +1335,7 @@
                 // חיבור היומן עצמו קורה בנפרד, דרך GIS, רק כשלוחצים "חבר יומן Google" בהגדרות.
                 const provider = new firebase.auth.GoogleAuthProvider();
                 const result = await auth.signInWithPopup(provider);
+                logAppEvent('login', { method: 'google' });
             } catch (e) {
                 if (e.code !== 'auth/popup-closed-by-user') {
                     showAuthError(translateAuthError(e));
@@ -1390,6 +1438,7 @@
                 return;
             }
             pendingManualCalendarConnect = true;
+            logAppEvent('sync_calendar_toggle', { action: 'connect' });
             // prompt: 'consent' מאלץ הצגת מסך הרשאה מלא ומחזיר טוקן טרי בכל פעם
             client.requestAccessToken({ prompt: 'consent' });
         }
@@ -1398,6 +1447,7 @@
             if (!confirm('לבטל את ההתחברות האוטומטית ליומן? תוכל תמיד לחבר שוב ידנית בעתיד.')) return;
             localStorage.removeItem(CALENDAR_AUTOCONNECT_KEY);
             googleCalendarAccessToken = null;
+            logAppEvent('sync_calendar_toggle', { action: 'disconnect' });
             updateGoogleCalendarStatusUI();
         }
 
@@ -1676,11 +1726,17 @@
                 await userRef.set({
                     email: currentUser.email,
                     role: 'coach',
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+                    sessionCount: 1
                 });
                 currentUserRole = 'coach';
             } else {
                 currentUserRole = snap.data().role || 'coach';
+                userRef.update({
+                    lastActive: firebase.firestore.FieldValue.serverTimestamp(),
+                    sessionCount: firebase.firestore.FieldValue.increment(1)
+                }).catch(e => console.warn('שגיאה בעדכון lastActive:', e));
             }
 
             document.getElementById('user-email-badge').innerText =
@@ -1688,9 +1744,86 @@
             document.getElementById('header-user-info').style.display = 'flex';
             document.getElementById('admin-mode-notice').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('invite-coach-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
+            document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
 
             subscribeToTeams();
             showView('view-teams-list');
+        }
+
+        function openFeedbackModal() {
+            const modal = document.getElementById('feedback-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeFeedbackModal() {
+            const modal = document.getElementById('feedback-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        async function submitFeedback() {
+            const input = document.getElementById('feedback-text-input');
+            const text = input.value.trim();
+            if (!text) {
+                alert('נא לכתוב הודעה לפני השליחה.');
+                return;
+            }
+
+            const btn = document.getElementById('feedback-submit-btn');
+            btn.disabled = true;
+            try {
+                await db.collection('feedback').add({
+                    uid: currentUser ? currentUser.uid : null,
+                    email: currentUser ? currentUser.email : null,
+                    message: text,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                logAppEvent('feedback_submitted');
+                alert('תודה! ההודעה נשלחה בהצלחה 🙏');
+                input.value = '';
+                closeFeedbackModal();
+            } catch (e) {
+                console.warn('שגיאה בשליחת משוב:', e);
+                alert('משהו השתבש בשליחה. אפשר גם לשלוח ישירות למייל: haim.binyamini@gmail.com');
+            }
+            btn.disabled = false;
+        }
+
+        // --- לוח ניהול (מנהל בלבד): צפייה בהצעות ומשוב שהתקבלו ---
+        function formatFeedbackDate(ts) {
+            try {
+                if (!ts || !ts.toDate) return '';
+                return ts.toDate().toLocaleString('he-IL');
+            } catch (e) {
+                return '';
+            }
+        }
+
+        async function loadAdminFeedback() {
+            const container = document.getElementById('admin-feedback-list');
+            if (!container) return;
+            container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">טוען...</p>';
+
+            try {
+                const snap = await db.collection('feedback').orderBy('createdAt', 'desc').limit(50).get();
+                if (snap.empty) {
+                    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין עדיין פניות.</p>';
+                    return;
+                }
+
+                container.innerHTML = snap.docs.map(doc => {
+                    const d = doc.data();
+                    const safeMsg = (d.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `
+                        <div class="note-card" style="margin-bottom:8px;">
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${formatFeedbackDate(d.createdAt)} • ${d.email || 'אנונימי'}</p>
+                            <p style="white-space:pre-wrap;">${safeMsg}</p>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.warn('שגיאה בטעינת פניות:', e);
+                container.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">שגיאה בטעינת הפניות. ודא שיש לך הרשאת admin וכללי אבטחה מתאימים ב-Firestore.</p>';
+            }
         }
 
         // --- טעינת קבוצות מ-Firestore בזמן אמת ---
@@ -2389,7 +2522,7 @@
                         <div>
                             <h3 style="color:${teamColor};">${p.title || 'אימון'} ${p.isRecurringVirtual ? '<span style="font-size:0.7rem; color:var(--text-muted);">🔁 קבוע</span>' : ''}</h3>
                             ${(p.time || p.location) ? `<p style="font-size:0.9rem; color:var(--info); font-weight:bold;">${p.time ? '🕒 ' + formatTimeRange(p) : ''}${p.time && p.location ? ' • ' : ''}${p.location ? '📍 ' + p.location : ''}</p>` : ''}
-                            ${(p.exercises && p.exercises.length > 0) ? `<p style="font-size:0.85rem; color:var(--text-muted);">🎨 ${p.exercises.length} תרגילים</p>` : ''}
+                            ${(p.exercises && p.exercises.length > 0) ? `<p style="font-size:0.85rem; color:var(--text-muted);">🎨 ${p.exercises.length} תרגילים${p.videoUrl || p.exercises.some(e => e.videoUrl) ? ' • 🎥' : ''}</p>` : (p.videoUrl ? `<p style="font-size:0.85rem; color:var(--text-muted);">🎥 יש סרטון</p>` : '')}
                         </div>
                     `;
                     item.onclick = () => openDayPractices(dateKey);
@@ -2417,6 +2550,8 @@
         async function shareWeeklyScheduleImage() {
             const team = getCurrentTeam();
             if (!team) return;
+
+            logAppEvent('share_weekly_schedule', { team_id: team.id || null });
 
             const teamColor = getTeamColor(team);
             const weekStart = getWeekStart(currentDate);
@@ -2970,11 +3105,12 @@
                                 <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
                                     ${practice.exercises.map(ex => `
                                         <span onclick="event.stopPropagation(); openExerciseFromDayList('${practice.id}', '${ex.id}')" style="cursor:pointer; background:#0f172a; border:1px solid var(--border-color); border-radius:6px; padding:4px 10px; font-size:0.8rem; color:var(--info);">
-                                            🎨 ${ex.title || 'תרגיל'}
+                                            🎨 ${ex.title || 'תרגיל'}${ex.videoUrl ? ' 🎥' : ''}
                                         </span>
                                     `).join('')}
                                 </div>
                             ` : ''}
+                            ${practice.videoUrl ? `<div style="margin-top:6px;">${getVideoLinkBadge(practice.videoUrl)}</div>` : ''}
                             <p style="font-size:0.85rem; margin-top:4px;">${practice.notes ? practice.notes.substring(0, 50) + '...' : 'ללא הערות'}</p>
                         </div>
                     </div>
@@ -3061,6 +3197,7 @@
             };
 
             team.practices[selectedPracticeDateStr].push(newPractice);
+            logAppEvent('create_practice', { team_id: team.id || null });
             saveState();
 
             editPractice(newId);
@@ -3155,9 +3292,23 @@
             document.getElementById('practice-endtime-input').value = practice.endTime || '';
             document.getElementById('practice-location-input').value = practice.location || '';
             document.getElementById('practice-notes-input').value = practice.notes || '';
+            document.getElementById('practice-video-input').value = practice.videoUrl || '';
 
             renderExercisesList();
             showView('view-practice-edit');
+        }
+
+        // ============================================================
+        // עזר לקישורי וידאו (YouTube / Facebook / Instagram / כללי)
+        // ============================================================
+        function getVideoLinkBadge(url) {
+            if (!url) return '';
+            let label = '🎥 צפה בסרטון';
+            if (/youtu\.?be/i.test(url)) label = '▶️ צפה ב-YouTube';
+            else if (/facebook\.com|fb\.watch/i.test(url)) label = '▶️ צפה ב-Facebook';
+            else if (/instagram\.com/i.test(url)) label = '▶️ צפה ב-Instagram';
+            const safeUrl = url.replace(/"/g, '&quot;');
+            return `<a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-info" style="display:inline-block; padding:6px 10px; font-size:0.8rem; text-decoration:none; margin-top:4px;">${label}</a>`;
         }
 
         function renderExercisesList() {
@@ -3183,6 +3334,7 @@
                         <div>
                             <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${ex.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט עדיין'}</p>
+                            ${getVideoLinkBadge(ex.videoUrl)}
                         </div>
                         <div style="display:flex; gap:6px; flex-shrink:0;">
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openExerciseEditor('${ex.id}')">✏️ ערוך</button>
@@ -3206,9 +3358,11 @@
                 id: 'ex_' + Date.now(),
                 title: `תרגיל ${practice.exercises.length + 1}`,
                 type: 'half',
-                canvasImg: null
+                canvasImg: null,
+                videoUrl: ''
             };
             practice.exercises.push(newExercise);
+            logAppEvent('create_drill', { team_id: team.id || null });
             saveState();
             renderExercisesList();
 
@@ -3250,6 +3404,7 @@
                 practice.endTime = document.getElementById('practice-endtime-input').value;
                 practice.location = document.getElementById('practice-location-input').value.trim();
                 practice.notes = document.getElementById('practice-notes-input').value;
+                practice.videoUrl = document.getElementById('practice-video-input').value.trim();
             }
 
             if (practice) {
@@ -3310,6 +3465,7 @@
 
             document.getElementById('court-title').innerText = `שרטוט - ${practice.title || 'אימון'}`;
             document.getElementById('exercise-title-input').value = exercise.title || '';
+            document.getElementById('exercise-video-input').value = exercise.videoUrl || '';
             document.getElementById('court-synced-notes').value = practice.notes || '';
             setExerciseCourtType(exercise.type || 'half');
 
@@ -3339,6 +3495,7 @@
 
             if (exercise) {
                 exercise.title = document.getElementById('exercise-title-input').value.trim() || exercise.title || 'תרגיל';
+                exercise.videoUrl = document.getElementById('exercise-video-input').value.trim();
                 exercise.type = currentCourtType;
                 if (canvas) {
                     exercise.canvasImg = canvas.toDataURL();
@@ -4090,5 +4247,24 @@
 
         window.addEventListener('load', initInstallBanner);
     </script>
+
+    <!-- ========================================== -->
+    <!-- מודל הצעות ומשוב -->
+    <!-- ========================================== -->
+    <div id="feedback-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:420px; width:100%;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">💡 הצעות ומשוב</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">יש לך רעיון לשיפור, תוספת, או משהו שלא עובד טוב? נשמח לשמוע!</p>
+            <div class="form-group">
+                <textarea id="feedback-text-input" placeholder="כתוב כאן את ההצעה או המשוב שלך..." style="min-height:100px;"></textarea>
+            </div>
+            <div class="actions-row">
+                <button class="btn" id="feedback-submit-btn" onclick="submitFeedback()">שלח</button>
+                <button class="btn btn-secondary" onclick="closeFeedbackModal()">ביטול</button>
+            </div>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin-top:12px; text-align:center;">אפשר גם לכתוב ישירות למייל: <a href="mailto:haim.binyamini@gmail.com" style="color:var(--info);">haim.binyamini@gmail.com</a></p>
+        </div>
+    </div>
+
 </body>
 </html>
