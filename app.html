@@ -606,7 +606,11 @@
             <span id="active-team-name" class="active-team-badge" style="display:none;">אין קבוצה נבחרת</span>
             <button class="btn-header" onclick="showView('view-teams-list')">רשימת קבוצות</button>
             <button class="btn-header" onclick="showView('view-account-settings')">⚙️ הגדרות</button>
-            <button class="btn-header" onclick="openFeedbackModal()">💡 הצעות ומשוב</button>
+            <button class="btn-header" onclick="openInviteModal()">📨 שלח אפליקציה למאמן</button>
+            <button class="btn-header" onclick="openFeedbackModal()">💡 הצעות ומשוב / צור קשר</button>
+            <button id="admin-feedback-bell" class="btn-header" style="display:none; position:relative;" onclick="openAdminFeedbackFromBell()">
+                🔔<span id="admin-feedback-badge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--danger); color:white; border-radius:10px; font-size:0.65rem; padding:1px 5px; min-width:16px; text-align:center;">0</span>
+            </button>
             <button class="btn-header" onclick="handleLogout()">התנתק</button>
         </div>
     </header>
@@ -669,20 +673,6 @@
                     <button class="court-type-btn selected" id="admin-filter-mine-btn" style="flex:1;" onclick="setAdminTeamsFilter('mine')">📋 רק הקבוצות שלי</button>
                     <button class="court-type-btn" id="admin-filter-all-btn" style="flex:1;" onclick="setAdminTeamsFilter('all')">🌐 כל הקבוצות במערכת</button>
                 </div>
-            </div>
-
-            <div id="invite-coach-card" class="card" style="display:none;">
-                <h3>📨 הזמן מאמן חדש למערכת</h3>
-                <br>
-                <div class="form-group">
-                    <label>שם המאמן (אופציונלי, ישולב בהודעה):</label>
-                    <input type="text" id="invite-coach-name" placeholder="לדוגמה: יוסי כהן">
-                </div>
-                <div class="actions-row">
-                    <button class="btn" style="flex:1; background:#25D366; color:#0f172a;" onclick="sendInviteWhatsapp()">💬 שלח בוואטסאפ</button>
-                    <button class="btn btn-info" style="flex:1;" onclick="sendInviteEmail()">✉️ שלח באימייל</button>
-                </div>
-                <button class="btn btn-secondary" style="width:100%; margin-top:8px;" onclick="copyInviteLink()">📋 העתק קישור בלבד</button>
             </div>
 
             <div class="card" style="padding: 10px; margin-bottom: 15px;">
@@ -1724,6 +1714,10 @@
         function handleLogout() {
             googleCalendarAccessToken = null;
             localStorage.removeItem(CALENDAR_AUTOCONNECT_KEY);
+            if (unsubscribeFeedbackNotifications) {
+                unsubscribeFeedbackNotifications();
+                unsubscribeFeedbackNotifications = null;
+            }
             auth.signOut();
         }
 
@@ -1753,10 +1747,10 @@
             document.getElementById('header-user-info').style.display = 'flex';
             document.getElementById('admin-mode-notice').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-teams-filter').style.display = currentUserRole === 'admin' ? 'block' : 'none';
-            document.getElementById('invite-coach-card').style.display = 'block';
             document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
 
             subscribeToTeams();
+            subscribeToFeedbackNotifications();
             showView('view-teams-list');
         }
 
@@ -1767,6 +1761,16 @@
 
         function closeFeedbackModal() {
             const modal = document.getElementById('feedback-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function openInviteModal() {
+            const modal = document.getElementById('invite-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function closeInviteModal() {
+            const modal = document.getElementById('invite-modal');
             if (modal) modal.style.display = 'none';
         }
 
@@ -1785,6 +1789,7 @@
                     uid: currentUser ? currentUser.uid : null,
                     email: currentUser ? currentUser.email : null,
                     message: text,
+                    read: false,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 logAppEvent('feedback_submitted');
@@ -1796,6 +1801,60 @@
                 alert('משהו השתבש בשליחה. אפשר גם לשלוח ישירות למייל: haim.binyamini@gmail.com');
             }
             btn.disabled = false;
+        }
+
+        // --- התראה בזמן אמת ל-admin כשמתקבלת הצעה/משוב חדשים ---
+        let unsubscribeFeedbackNotifications = null;
+        let feedbackNotificationsFirstLoad = true;
+
+        function subscribeToFeedbackNotifications() {
+            if (currentUserRole !== 'admin') return;
+            if (unsubscribeFeedbackNotifications) unsubscribeFeedbackNotifications();
+            feedbackNotificationsFirstLoad = true;
+
+            unsubscribeFeedbackNotifications = db.collection('feedback').where('read', '==', false)
+                .onSnapshot((snap) => {
+                    const badge = document.getElementById('admin-feedback-badge');
+                    const bell = document.getElementById('admin-feedback-bell');
+                    if (!badge || !bell) return;
+
+                    const count = snap.size;
+                    bell.style.display = 'inline-block';
+                    if (count > 0) {
+                        badge.style.display = 'block';
+                        badge.innerText = count > 9 ? '9+' : String(count);
+                    } else {
+                        badge.style.display = 'none';
+                    }
+
+                    if (!feedbackNotificationsFirstLoad) {
+                        snap.docChanges().forEach((change) => {
+                            if (change.type === 'added') {
+                                showFeedbackToast('💡 התקבלה הצעה/משוב חדשים!');
+                            }
+                        });
+                    }
+                    feedbackNotificationsFirstLoad = false;
+                }, (err) => {
+                    console.warn('שגיאה במעקב אחר פניות חדשות:', err);
+                });
+        }
+
+        function showFeedbackToast(text) {
+            const toast = document.getElementById('feedback-toast');
+            if (!toast) return;
+            toast.innerText = text;
+            toast.style.display = 'block';
+            toast.style.opacity = '1';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => { toast.style.display = 'none'; }, 400);
+            }, 4000);
+        }
+
+        function openAdminFeedbackFromBell() {
+            showView('view-account-settings');
+            loadAdminFeedback();
         }
 
         // --- לוח ניהול (מנהל בלבד): צפייה בהצעות ומשוב שהתקבלו ---
@@ -1823,13 +1882,27 @@
                 container.innerHTML = snap.docs.map(doc => {
                     const d = doc.data();
                     const safeMsg = (d.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const isUnread = d.read === false;
                     return `
-                        <div class="note-card" style="margin-bottom:8px;">
-                            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${formatFeedbackDate(d.createdAt)} • ${d.email || 'אנונימי'}</p>
+                        <div class="note-card" style="margin-bottom:8px; ${isUnread ? 'border-right: 3px solid var(--primary);' : ''}">
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${isUnread ? '🆕 ' : ''}${formatFeedbackDate(d.createdAt)} • ${d.email || 'אנונימי'}</p>
                             <p style="white-space:pre-wrap;">${safeMsg}</p>
                         </div>
                     `;
                 }).join('');
+
+                // סימון כל הפניות שהוצגו כ"נקראו", כדי שהבאדג' יתאפס
+                const batch = db.batch();
+                let hasUnread = false;
+                snap.docs.forEach(doc => {
+                    if (doc.data().read === false) {
+                        hasUnread = true;
+                        batch.update(doc.ref, { read: true });
+                    }
+                });
+                if (hasUnread) {
+                    await batch.commit().catch(e => console.warn('שגיאה בסימון פניות כנקראו:', e));
+                }
             } catch (e) {
                 console.warn('שגיאה בטעינת פניות:', e);
                 container.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">שגיאה בטעינת הפניות. ודא שיש לך הרשאת admin וכללי אבטחה מתאימים ב-Firestore.</p>';
@@ -4271,21 +4344,43 @@
         window.addEventListener('load', initInstallBanner);
     </script>
 
+    <div id="feedback-toast" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--primary); color:#0f172a; font-weight:bold; padding:10px 20px; border-radius:10px; z-index:2000; transition:opacity 0.4s; box-shadow:0 4px 12px rgba(0,0,0,0.3);"></div>
+
     <!-- ========================================== -->
-    <!-- מודל הצעות ומשוב -->
+    <!-- מודל הצעות ומשוב / צור קשר -->
     <!-- ========================================== -->
     <div id="feedback-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
         <div class="card" style="max-width:420px; width:100%;">
-            <h3 style="color:var(--primary); margin-bottom:10px;">💡 הצעות ומשוב</h3>
-            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">יש לך רעיון לשיפור, תוספת, או משהו שלא עובד טוב? נשמח לשמוע!</p>
+            <h3 style="color:var(--primary); margin-bottom:10px;">💡 הצעות ומשוב / צור קשר</h3>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:12px;">יש לך רעיון לשיפור, נתקלת בבעיה, או פשוט רוצה ליצור קשר בכל נושא? נשמח לשמוע!</p>
             <div class="form-group">
-                <textarea id="feedback-text-input" placeholder="כתוב כאן את ההצעה או המשוב שלך..." style="min-height:100px;"></textarea>
+                <textarea id="feedback-text-input" placeholder="כתוב כאן את ההודעה שלך..." style="min-height:100px;"></textarea>
             </div>
             <div class="actions-row">
                 <button class="btn" id="feedback-submit-btn" onclick="submitFeedback()">שלח</button>
                 <button class="btn btn-secondary" onclick="closeFeedbackModal()">ביטול</button>
             </div>
             <p style="color:var(--text-muted); font-size:0.8rem; margin-top:12px; text-align:center;">אפשר גם לכתוב ישירות למייל: <a href="mailto:haim.binyamini@gmail.com" style="color:var(--info);">haim.binyamini@gmail.com</a></p>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- מודל הזמנת מאמן חדש -->
+    <!-- ========================================== -->
+    <div id="invite-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:420px; width:100%;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">📨 הזמן מאמן חדש למערכת</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">ההזמנה היא קישור כללי להרשמה בלבד - המאמן שיצטרף יפתח חשבון וקבוצה עצמאיים משלו, ולא תהיה לו גישה לקבוצות שלך.</p>
+            <div class="form-group">
+                <label>שם המאמן (אופציונלי, ישולב בהודעה):</label>
+                <input type="text" id="invite-coach-name" placeholder="לדוגמה: יוסי כהן">
+            </div>
+            <div class="actions-row">
+                <button class="btn" style="flex:1; background:#25D366; color:#0f172a;" onclick="sendInviteWhatsapp()">💬 שלח בוואטסאפ</button>
+                <button class="btn btn-info" style="flex:1;" onclick="sendInviteEmail()">✉️ שלח באימייל</button>
+            </div>
+            <button class="btn btn-secondary" style="width:100%; margin-top:8px;" onclick="copyInviteLink()">📋 העתק קישור בלבד</button>
+            <button class="btn btn-secondary" style="width:100%; margin-top:8px;" onclick="closeInviteModal()">סגור</button>
         </div>
     </div>
 
