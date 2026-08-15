@@ -971,7 +971,11 @@
                 </div>
             </div>
 
-            <button class="btn btn-secondary" onclick="showView('view-team-dashboard')">חזרה לתפריט קבוצה</button>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="showView('view-players-list')">🏃 סגל שחקנים</button>
+                <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="showView('view-notes-main')">📝 הערות וטקטיקה</button>
+                <button class="btn btn-secondary" style="flex:1; min-width:140px;" onclick="openRecurringView()">🔁 קבועים וחגים</button>
+            </div>
         </div>
 
         <!-- מסך אימוני היום (מאפשר מספר אימונים/תרגילים ושכפול!) -->
