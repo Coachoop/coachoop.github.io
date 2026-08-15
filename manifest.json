@@ -1,7 +1,7 @@
 {
-  "name": "Coachoop - מערכת מאמן כדורסל",
+  "name": "Coachoop - מערכת למאמני כדורסל",
   "short_name": "Coachoop",
-  "description": "מערכת מאמן כדורסל - ניהול קבוצות, שחקנים, אימונים וטקטיקה",
+  "description": "מערכת ניהול קבוצות, שחקנים, אימונים וטקטיקה למאמני כדורסל",
   "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
