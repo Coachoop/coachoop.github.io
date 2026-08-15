@@ -772,22 +772,27 @@
                 <!-- קבוצות ייטענו דינמית -->
             </div>
 
-            <div class="card" style="margin-top: 15px;">
-                <h3>➕ הוספת קבוצה חדשה</h3>
-                <br>
-                <div class="form-group">
-                    <label>שם הקבוצה:</label>
-                    <input type="text" id="new-team-name" placeholder="לדוגמה: מכבי תל אביב נערים">
+            <div class="card" id="add-team-card" style="margin-top: 15px;">
+                <h3 id="add-team-toggle" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;" onclick="toggleAddTeamForm()">
+                    <span>➕ הוספת קבוצה חדשה</span>
+                    <span id="add-team-chevron" style="font-size:0.8rem; color:var(--text-muted);"></span>
+                </h3>
+                <div id="add-team-form-body">
+                    <br>
+                    <div class="form-group">
+                        <label>שם הקבוצה:</label>
+                        <input type="text" id="new-team-name" placeholder="לדוגמה: מכבי תל אביב נערים">
+                    </div>
+                    <div class="form-group">
+                        <label>שם המאמן:</label>
+                        <input type="text" id="new-coach-name" placeholder="הכנס שם מאמן">
+                    </div>
+                    <div class="form-group">
+                        <label>צבע הקבוצה (יוצג בלוח השנה הראשי):</label>
+                        <input type="color" id="new-team-color" class="team-color-dot" value="#f97316">
+                    </div>
+                    <button class="btn" id="create-team-btn" style="width: 100%; margin-top: 8px;" onclick="createNewTeam()">צור קבוצה חדשה</button>
                 </div>
-                <div class="form-group">
-                    <label>שם המאמן:</label>
-                    <input type="text" id="new-coach-name" placeholder="הכנס שם מאמן">
-                </div>
-                <div class="form-group">
-                    <label>צבע הקבוצה (יוצג בלוח השנה הראשי):</label>
-                    <input type="color" id="new-team-color" class="team-color-dot" value="#f97316">
-                </div>
-                <button class="btn" id="create-team-btn" style="width: 100%; margin-top: 8px;" onclick="createNewTeam()">צור קבוצה חדשה</button>
             </div>
         </div>
 
@@ -2323,11 +2328,35 @@
             renderGlobalCalendar();
         }
 
+        // האם המאמן פתח ידנית את טופס "הוספת קבוצה" (נשמר כדי שלא ייסגר מתחתיו
+        // אם הרשימה מתרעננת ברקע, למשל בגלל שינוי שהגיע מ-Firestore בזמן שהוא מקליד)
+        let addTeamFormManuallyOpened = false;
+
+        function setAddTeamFormOpen(isOpen) {
+            const body = document.getElementById('add-team-form-body');
+            const chevron = document.getElementById('add-team-chevron');
+            if (!body || !chevron) return;
+            body.style.display = isOpen ? 'block' : 'none';
+            chevron.innerText = isOpen ? '▲' : '▼';
+        }
+
+        function toggleAddTeamForm() {
+            const body = document.getElementById('add-team-form-body');
+            if (!body) return;
+            addTeamFormManuallyOpened = body.style.display === 'none';
+            setAddTeamFormOpen(addTeamFormManuallyOpened);
+        }
+
         function renderTeamsList() {
             const container = document.getElementById('teams-container');
             container.innerHTML = '';
 
-            if (appState.teams.length === 0) {
+            const hasTeams = appState.teams.length > 0;
+            // בלי קבוצות בכלל - הטופס תמיד פתוח, כדי שקבוצה ראשונה תהיה ברורה ומיידית.
+            // עם קבוצות קיימות - סגור כברירת מחדל, אלא אם המאמן כבר פתח אותו ידנית בעצמו.
+            setAddTeamFormOpen(!hasTeams || addTeamFormManuallyOpened);
+
+            if (!hasTeams) {
                 container.innerHTML = '<div class="card"><p style="color:var(--text-muted)">אין קבוצות עדיין. צור קבוצה ראשונה למטה!</p></div>';
                 return;
             }
