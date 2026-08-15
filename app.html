@@ -100,6 +100,55 @@
             color: white;
         }
 
+        .hamburger-menu-wrap {
+            position: relative;
+        }
+
+        .hamburger-menu-dropdown {
+            position: absolute;
+            top: 120%;
+            left: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            min-width: 250px;
+            z-index: 200;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .hamburger-menu-dropdown button {
+            background: transparent;
+            border: none;
+            color: var(--text-light);
+            text-align: right;
+            padding: 11px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .hamburger-menu-dropdown button:hover {
+            background: #334155;
+        }
+
+        .hamburger-badge {
+            background: var(--danger);
+            color: white;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            padding: 1px 7px;
+            min-width: 18px;
+            text-align: center;
+        }
+
         .container {
             width: 100%;
             max-width: 650px;
@@ -603,15 +652,26 @@
         <div id="header-user-info" style="display: none; align-items: center; gap: 8px; flex-wrap: wrap;">
             <button id="global-back-btn" class="btn-header" style="display:none;" onclick="goBack()" title="חזרה למסך הקודם">→ חזרה</button>
             <span id="user-email-badge" class="active-team-badge"></span>
+            <span id="admin-role-badge" class="admin-badge" style="display:none;">🛡️ מנהל</span>
             <span id="active-team-name" class="active-team-badge" style="display:none;">אין קבוצה נבחרת</span>
-            <button class="btn-header" onclick="showView('view-teams-list')">רשימת קבוצות</button>
-            <button class="btn-header" onclick="showView('view-account-settings')">⚙️ הגדרות</button>
-            <button class="btn-header" onclick="openInviteModal()">📨 שלח אפליקציה למאמן</button>
-            <button class="btn-header" onclick="openFeedbackModal()">💡 הצעות ומשוב / צור קשר</button>
-            <button id="admin-feedback-bell" class="btn-header" style="display:none; position:relative;" onclick="openAdminFeedbackFromBell()">
-                🔔<span id="admin-feedback-badge" style="display:none; position:absolute; top:-4px; right:-4px; background:var(--danger); color:white; border-radius:10px; font-size:0.65rem; padding:1px 5px; min-width:16px; text-align:center;">0</span>
-            </button>
-            <button class="btn-header" onclick="handleLogout()">התנתק</button>
+
+            <div class="hamburger-menu-wrap">
+                <button id="hamburger-btn" class="btn-header" style="position:relative; font-size:1.1rem; padding:6px 14px;" onclick="toggleHamburgerMenu()">
+                    ☰
+                    <span id="hamburger-badge" class="hamburger-badge" style="display:none; position:absolute; top:-6px; right:-6px;">0</span>
+                </button>
+                <div id="hamburger-menu" style="display:none;" class="hamburger-menu-dropdown">
+                    <button onclick="showView('view-teams-list'); closeHamburgerMenu()">📋 רשימת קבוצות</button>
+                    <button onclick="showView('view-account-settings'); closeHamburgerMenu()">⚙️ הגדרות</button>
+                    <button onclick="openInviteModal(); closeHamburgerMenu()">📨 שלח אפליקציה למאמן</button>
+                    <button onclick="openFeedbackModal(); closeHamburgerMenu()">💡 הצעות ומשוב / צור קשר</button>
+                    <button id="admin-feedback-menu-item" style="display:none;" onclick="openAdminFeedbackFromBell(); closeHamburgerMenu()">
+                        🔔 פניות שהתקבלו <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
+                    </button>
+                    <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
+                    <button onclick="handleLogout()">🚪 התנתק</button>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -1742,12 +1802,13 @@
                 }).catch(e => console.warn('שגיאה בעדכון lastActive:', e));
             }
 
-            document.getElementById('user-email-badge').innerText =
-                currentUser.email + (currentUserRole === 'admin' ? ' 🛡️ מנהל' : '');
+            document.getElementById('user-email-badge').innerText = currentUser.email;
+            document.getElementById('admin-role-badge').style.display = currentUserRole === 'admin' ? 'inline-block' : 'none';
             document.getElementById('header-user-info').style.display = 'flex';
             document.getElementById('admin-mode-notice').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-teams-filter').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
+            document.getElementById('admin-feedback-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
 
             subscribeToTeams();
             subscribeToFeedbackNotifications();
@@ -1773,6 +1834,25 @@
             const modal = document.getElementById('invite-modal');
             if (modal) modal.style.display = 'none';
         }
+
+        // --- תפריט המבורגר בכותרת ---
+        function toggleHamburgerMenu() {
+            const menu = document.getElementById('hamburger-menu');
+            if (!menu) return;
+            menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        function closeHamburgerMenu() {
+            const menu = document.getElementById('hamburger-menu');
+            if (menu) menu.style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            const wrap = document.querySelector('.hamburger-menu-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                closeHamburgerMenu();
+            }
+        });
 
         async function submitFeedback() {
             const input = document.getElementById('feedback-text-input');
@@ -1814,18 +1894,20 @@
 
             unsubscribeFeedbackNotifications = db.collection('feedback').where('read', '==', false)
                 .onSnapshot((snap) => {
-                    const badge = document.getElementById('admin-feedback-badge');
-                    const bell = document.getElementById('admin-feedback-bell');
-                    if (!badge || !bell) return;
+                    const menuBadge = document.getElementById('admin-feedback-badge');
+                    const hamburgerBadge = document.getElementById('hamburger-badge');
+                    if (!menuBadge || !hamburgerBadge) return;
 
                     const count = snap.size;
-                    bell.style.display = 'inline-block';
-                    if (count > 0) {
-                        badge.style.display = 'block';
-                        badge.innerText = count > 9 ? '9+' : String(count);
-                    } else {
-                        badge.style.display = 'none';
-                    }
+                    const label = count > 9 ? '9+' : String(count);
+                    [menuBadge, hamburgerBadge].forEach(el => {
+                        if (count > 0) {
+                            el.style.display = 'inline-block';
+                            el.innerText = label;
+                        } else {
+                            el.style.display = 'none';
+                        }
+                    });
 
                     if (!feedbackNotificationsFirstLoad) {
                         snap.docChanges().forEach((change) => {
