@@ -1500,42 +1500,15 @@
             return localStorage.getItem(CALENDAR_AUTOCONNECT_KEY) === 'true';
         }
 
-        // ============================================================
-        // ריענון שקט של הטוקן כשהוא פג תוקף (טוקנים של Google תקפים לכשעה בלבד,
-        // ולכן חיבור שנשאר פתוח יותר משעה מאבד את הטוקן - בלי הפונקציה הזו הסנכרון
-        // היה נכשל בשקט עד שהמשתמש פותח מחדש את מסך "חבר יומן Google" או טוען מחדש את הדף)
-        // ============================================================
-        function silentlyRefreshGoogleToken() {
-            return new Promise((resolve) => {
-                if (!isCalendarAutoConnectEnabled()) { resolve(false); return; }
-                const client = getGoogleTokenClient();
-                if (!client) { resolve(false); return; }
-
-                let settled = false;
-                const finish = (result) => {
-                    if (settled) return;
-                    settled = true;
-                    clearInterval(pollInterval);
-                    clearTimeout(giveUpTimeout);
-                    resolve(result);
-                };
-
-                // מחכים ל-callback הגלובלי שכבר מוגדר ב-getGoogleTokenClient() לעדכן את googleCalendarAccessToken
-                const pollInterval = setInterval(() => {
-                    if (googleCalendarAccessToken) finish(true);
-                }, 150);
-                const giveUpTimeout = setTimeout(() => finish(!!googleCalendarAccessToken), 4000);
-
-                // prompt ריק = ניסיון שקט, בלי חלון הרשאה, מסתמך על ההסכמה הקודמת של המשתמש
-                client.requestAccessToken({ prompt: '' });
-            });
-        }
-
-        // מוודא שיש טוקן תקף לפני פעולת סנכרון - מנסה ריענון שקט פעם אחת אם צריך
+        // מוודא שיש טוקן תקף לפני פעולת סנכרון.
+        // חשוב: לא מנסה ריענון שקט אוטומטי כאן! למרות השם prompt:'' ב-Google API,
+        // זה לא באמת מובטח כ"שקט" - בהרבה מצבים (עוגיות צד-שלישי חסומות, כמה חשבונות Google
+        // בדפדפן, אין session פעיל) Google פותחים בפועל את חלון "בחר חשבון" - מה שגרם
+        // לחלון הזה לקפוץ בכל שמירת אימון. לכן כאן רק בודקים אם כבר יש טוקן בזיכרון;
+        // אם אין - מחזירים false בלי לפתוח שום דבר, וההודעה שלנו (notifyCalendarSyncResult)
+        // תציע חיבור מחדש *ביוזמת המשתמש* בלבד.
         async function ensureGoogleCalendarConnected() {
-            if (googleCalendarAccessToken) return true;
-            if (!isCalendarAutoConnectEnabled()) return false;
-            return await silentlyRefreshGoogleToken();
+            return !!googleCalendarAccessToken;
         }
 
         // מציג התראה לא-חוסמת (טוסט) כשסנכרון ליומן נכשל, כדי שהמאמן ידע שהאימון
@@ -1633,13 +1606,11 @@
             if (elRecurring) elRecurring.innerText = statusText;
         }
 
-        async function googleCalendarRequest(method, pathAndQuery, body, isRetry) {
+        async function googleCalendarRequest(method, pathAndQuery, body) {
+            // כאן ג"כ לא מנסים ריענון שקט אוטומטי (ראו הסבר ב-ensureGoogleCalendarConnected) -
+            // אם אין טוקן, פשוט נכשלים בעדינות ומחזירים null; הקריאה שקראה לפונקציה הזו
+            // כבר עברה קודם דרך ensureGoogleCalendarConnected שבודק את זה.
             if (!googleCalendarAccessToken) {
-                // ייתכן שהטוקן פג תוקף מאז טעינת הדף (טוקן תקף לכשעה בלבד) - ננסה ריענון שקט
-                if (!isRetry) {
-                    const refreshed = await silentlyRefreshGoogleToken();
-                    if (refreshed) return googleCalendarRequest(method, pathAndQuery, body, true);
-                }
                 return null;
             }
             try {
@@ -1655,13 +1626,7 @@
                 if (res.status === 401) {
                     googleCalendarAccessToken = null;
                     updateGoogleCalendarStatusUI();
-                    // ניסיון ריענון שקט אחד לפני שמוותרים לגמרי - זו בדיוק הבעיה שגרמה לאימונים
-                    // לא להיכנס ליומן בלי לפתוח מחדש את מסך החיבור
-                    if (!isRetry) {
-                        const refreshed = await silentlyRefreshGoogleToken();
-                        if (refreshed) return googleCalendarRequest(method, pathAndQuery, body, true);
-                    }
-                    console.warn('חיבור היומן פג תוקף והריענון השקט נכשל - יש להתחבר מחדש דרך "חבר יומן Google".');
+                    console.warn('חיבור היומן פג תוקף - יש להתחבר מחדש דרך "חבר יומן Google".');
                     return null;
                 }
                 if (!res.ok) {
