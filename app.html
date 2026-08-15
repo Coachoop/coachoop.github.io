@@ -1538,6 +1538,17 @@
             return await silentlyRefreshGoogleToken();
         }
 
+        // מציג התראה לא-חוסמת (טוסט) כשסנכרון ליומן נכשל, כדי שהמאמן ידע שהאימון
+        // *נשמר באפליקציה* אבל *לא* הגיע ליומן Google בפועל - ולא יגלה את זה רק
+        // כשיפתח את Google Calendar וימצא שהאימון חסר
+        function notifyCalendarSyncResult(result) {
+            if (result === 'not_connected') {
+                showFeedbackToast('⚠️ נשמר, אך לא סונכרן ליומן Google - החיבור פג. אפשר לחבר מחדש בהגדרות.');
+            } else if (result === 'failed') {
+                showFeedbackToast('⚠️ נשמר, אך הסנכרון ליומן Google נכשל.');
+            }
+        }
+
         // דגל שמסמן שהמשתמש עצמו לחץ על "חבר יומן Google" (בניגוד לניסיון שקט ברקע),
         // כדי שנדע אם להציג הודעת הצלחה/כישלון או לא
         let pendingManualCalendarConnect = false;
@@ -3554,7 +3565,8 @@
             }
 
             await cancelRecurringInstanceInGoogleCalendar(rule, dateKey);
-            await syncPracticeToGoogleCalendar(materializedPractice, dateKey);
+            const syncResult = await syncPracticeToGoogleCalendar(materializedPractice, dateKey);
+            notifyCalendarSyncResult(syncResult);
 
             saveState();
             editPractice(newId);
@@ -3648,8 +3660,10 @@
 
             team.practices[targetDate].push(duplicatedPractice);
 
-            await syncPracticeToGoogleCalendar(duplicatedPractice, targetDate);
             saveState();
+
+            const syncResult = await syncPracticeToGoogleCalendar(duplicatedPractice, targetDate);
+            notifyCalendarSyncResult(syncResult);
 
             alert(`התרגיל/אימון הועתק בהצלחה לתאריך ${targetDate}!`);
 
@@ -3819,10 +3833,18 @@
             practice.notes = document.getElementById('practice-notes-input').value;
             practice.videoUrl = document.getElementById('practice-video-input').value.trim();
 
-            await syncPracticeToGoogleCalendar(practice, selectedPracticeDateStr);
-
+            const syncResult = await syncPracticeToGoogleCalendar(practice, selectedPracticeDateStr);
             saveState();
-            alert('האימון נשמר!');
+
+            if (syncResult === 'not_connected') {
+                if (confirm('האימון נשמר! ⚠️ אך לא סונכרן ליומן Google - החיבור פג.\n\nלהתחבר מחדש עכשיו?')) {
+                    connectGoogleCalendar();
+                }
+            } else if (syncResult === 'failed') {
+                alert('האימון נשמר! ⚠️ אך הסנכרון ליומן Google נכשל. אפשר לנסות שוב מאוחר יותר.');
+            } else {
+                alert('האימון נשמר!');
+            }
 
             if (backToPracticeEdit) {
                 showView('view-practice-edit');
