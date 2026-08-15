@@ -787,7 +787,7 @@
                     <label>צבע הקבוצה (יוצג בלוח השנה הראשי):</label>
                     <input type="color" id="new-team-color" class="team-color-dot" value="#f97316">
                 </div>
-                <button class="btn" style="width: 100%; margin-top: 8px;" onclick="createNewTeam()">צור קבוצה חדשה</button>
+                <button class="btn" id="create-team-btn" style="width: 100%; margin-top: 8px;" onclick="createNewTeam()">צור קבוצה חדשה</button>
             </div>
         </div>
 
@@ -813,9 +813,21 @@
             </div>
 
             <div id="admin-feedback-card" class="card" style="margin-bottom:15px; padding:14px; display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
                     <strong>💡 הצעות ומשוב שהתקבלו</strong>
                     <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="loadAdminFeedback()">🔄 רענן</button>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                    <button class="court-type-btn selected" id="feedback-filter-all-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('all')">הכל</button>
+                    <button class="court-type-btn" id="feedback-filter-open-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('open')">פתוחות</button>
+                    <button class="court-type-btn" id="feedback-filter-done-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('done')">בוצעו</button>
+                    <button class="court-type-btn" id="feedback-filter-dismissed-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('dismissed')">התעלמתי</button>
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <select id="admin-feedback-sort" onchange="renderAdminFeedbackList()">
+                        <option value="date_desc">מיון: תאריך - חדש לישן</option>
+                        <option value="date_asc">מיון: תאריך - ישן לחדש</option>
+                    </select>
                 </div>
                 <div id="admin-feedback-list">
                     <p style="color:var(--text-muted); font-size:0.85rem;">לחץ "רענן" כדי לטעון פניות.</p>
@@ -1488,6 +1500,44 @@
             return localStorage.getItem(CALENDAR_AUTOCONNECT_KEY) === 'true';
         }
 
+        // ============================================================
+        // ריענון שקט של הטוקן כשהוא פג תוקף (טוקנים של Google תקפים לכשעה בלבד,
+        // ולכן חיבור שנשאר פתוח יותר משעה מאבד את הטוקן - בלי הפונקציה הזו הסנכרון
+        // היה נכשל בשקט עד שהמשתמש פותח מחדש את מסך "חבר יומן Google" או טוען מחדש את הדף)
+        // ============================================================
+        function silentlyRefreshGoogleToken() {
+            return new Promise((resolve) => {
+                if (!isCalendarAutoConnectEnabled()) { resolve(false); return; }
+                const client = getGoogleTokenClient();
+                if (!client) { resolve(false); return; }
+
+                let settled = false;
+                const finish = (result) => {
+                    if (settled) return;
+                    settled = true;
+                    clearInterval(pollInterval);
+                    clearTimeout(giveUpTimeout);
+                    resolve(result);
+                };
+
+                // מחכים ל-callback הגלובלי שכבר מוגדר ב-getGoogleTokenClient() לעדכן את googleCalendarAccessToken
+                const pollInterval = setInterval(() => {
+                    if (googleCalendarAccessToken) finish(true);
+                }, 150);
+                const giveUpTimeout = setTimeout(() => finish(!!googleCalendarAccessToken), 4000);
+
+                // prompt ריק = ניסיון שקט, בלי חלון הרשאה, מסתמך על ההסכמה הקודמת של המשתמש
+                client.requestAccessToken({ prompt: '' });
+            });
+        }
+
+        // מוודא שיש טוקן תקף לפני פעולת סנכרון - מנסה ריענון שקט פעם אחת אם צריך
+        async function ensureGoogleCalendarConnected() {
+            if (googleCalendarAccessToken) return true;
+            if (!isCalendarAutoConnectEnabled()) return false;
+            return await silentlyRefreshGoogleToken();
+        }
+
         // דגל שמסמן שהמשתמש עצמו לחץ על "חבר יומן Google" (בניגוד לניסיון שקט ברקע),
         // כדי שנדע אם להציג הודעת הצלחה/כישלון או לא
         let pendingManualCalendarConnect = false;
@@ -1572,8 +1622,15 @@
             if (elRecurring) elRecurring.innerText = statusText;
         }
 
-        async function googleCalendarRequest(method, pathAndQuery, body) {
-            if (!googleCalendarAccessToken) return null;
+        async function googleCalendarRequest(method, pathAndQuery, body, isRetry) {
+            if (!googleCalendarAccessToken) {
+                // ייתכן שהטוקן פג תוקף מאז טעינת הדף (טוקן תקף לכשעה בלבד) - ננסה ריענון שקט
+                if (!isRetry) {
+                    const refreshed = await silentlyRefreshGoogleToken();
+                    if (refreshed) return googleCalendarRequest(method, pathAndQuery, body, true);
+                }
+                return null;
+            }
             try {
                 const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/${pathAndQuery}`, {
                     method,
@@ -1587,7 +1644,13 @@
                 if (res.status === 401) {
                     googleCalendarAccessToken = null;
                     updateGoogleCalendarStatusUI();
-                    console.warn('חיבור היומן פג תוקף - יש להתחבר מחדש דרך "חבר יומן Google".');
+                    // ניסיון ריענון שקט אחד לפני שמוותרים לגמרי - זו בדיוק הבעיה שגרמה לאימונים
+                    // לא להיכנס ליומן בלי לפתוח מחדש את מסך החיבור
+                    if (!isRetry) {
+                        const refreshed = await silentlyRefreshGoogleToken();
+                        if (refreshed) return googleCalendarRequest(method, pathAndQuery, body, true);
+                    }
+                    console.warn('חיבור היומן פג תוקף והריענון השקט נכשל - יש להתחבר מחדש דרך "חבר יומן Google".');
                     return null;
                 }
                 if (!res.ok) {
@@ -1616,7 +1679,7 @@
 
         // --- סנכרון אימון חד-פעמי ---
         async function syncPracticeToGoogleCalendar(practice, dateKey) {
-            if (!isGoogleCalendarConnected()) return 'not_connected';
+            if (!(await ensureGoogleCalendarConnected())) return 'not_connected';
             if (!practice.time) {
                 console.warn('[Coachoop] דילוג על סנכרון אימון - אין שעה מוגדרת:', practice.title, dateKey);
                 return 'skipped_no_time';
@@ -1654,7 +1717,7 @@
         }
 
         async function deletePracticeGoogleEvent(practice) {
-            if (!isGoogleCalendarConnected() || !practice || !practice.googleEventId) return;
+            if (!practice || !practice.googleEventId || !(await ensureGoogleCalendarConnected())) return;
             try {
                 await googleCalendarRequest('DELETE', `events/${practice.googleEventId}`);
             } catch (e) {
@@ -1664,7 +1727,7 @@
 
         // --- סנכרון אימון קבוע (אירוע חוזר ביומן) ---
         async function syncRecurringRuleToGoogleCalendar(rule) {
-            if (!isGoogleCalendarConnected()) return 'not_connected';
+            if (!(await ensureGoogleCalendarConnected())) return 'not_connected';
             if (!rule.time) {
                 console.warn('[Coachoop] דילוג על סנכרון אימון קבוע - אין שעה מוגדרת:', rule.title);
                 return 'skipped_no_time';
@@ -1710,7 +1773,7 @@
         }
 
         async function deleteRecurringRuleGoogleEvent(rule) {
-            if (!isGoogleCalendarConnected() || !rule || !rule.googleEventId) return;
+            if (!rule || !rule.googleEventId || !(await ensureGoogleCalendarConnected())) return;
             try {
                 await googleCalendarRequest('DELETE', `events/${rule.googleEventId}`);
             } catch (e) {
@@ -1720,7 +1783,7 @@
 
         // ביטול מופע בודד של אימון קבוע (כשעורכים/מבטלים ליום ספציפי)
         async function cancelRecurringInstanceInGoogleCalendar(rule, dateKey) {
-            if (!isGoogleCalendarConnected() || !rule || !rule.googleEventId) return;
+            if (!rule || !rule.googleEventId || !(await ensureGoogleCalendarConnected())) return;
             try {
                 const timeMin = encodeURIComponent(`${dateKey}T00:00:00Z`);
                 const timeMax = encodeURIComponent(`${dateKey}T23:59:59Z`);
@@ -1736,7 +1799,7 @@
 
         // --- סנכרון חג (אירוע יום שלם) ---
         async function syncHolidayToGoogleCalendar(holiday) {
-            if (!isGoogleCalendarConnected()) return 'not_connected';
+            if (!(await ensureGoogleCalendarConnected())) return 'not_connected';
 
             const endExclusive = addDaysToDateStr(holiday.endDate || holiday.startDate, 1);
             const eventBody = {
@@ -1765,7 +1828,7 @@
         }
 
         async function deleteHolidayGoogleEvent(holiday) {
-            if (!isGoogleCalendarConnected() || !holiday || !holiday.googleEventId) return;
+            if (!holiday || !holiday.googleEventId || !(await ensureGoogleCalendarConnected())) return;
             try {
                 await googleCalendarRequest('DELETE', `events/${holiday.googleEventId}`);
             } catch (e) {
@@ -1875,6 +1938,7 @@
                     email: currentUser ? currentUser.email : null,
                     message: text,
                     read: false,
+                    status: 'open',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 logAppEvent('feedback_submitted');
@@ -1954,6 +2018,18 @@
             }
         }
 
+        let adminFeedbackCache = [];
+        let adminFeedbackFilter = 'all';
+
+        function setFeedbackFilter(filter) {
+            adminFeedbackFilter = filter;
+            ['all', 'open', 'done', 'dismissed'].forEach(f => {
+                const btn = document.getElementById(`feedback-filter-${f}-btn`);
+                if (btn) btn.classList.toggle('selected', f === filter);
+            });
+            renderAdminFeedbackList();
+        }
+
         async function loadAdminFeedback() {
             const container = document.getElementById('admin-feedback-list');
             if (!container) return;
@@ -1961,30 +2037,18 @@
 
             try {
                 const snap = await db.collection('feedback').orderBy('createdAt', 'desc').limit(50).get();
-                if (snap.empty) {
-                    container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין עדיין פניות.</p>';
-                    return;
-                }
+                adminFeedbackCache = snap.docs.map(doc => ({ id: doc.id, ref: doc.ref, ...doc.data() }));
 
-                container.innerHTML = snap.docs.map(doc => {
-                    const d = doc.data();
-                    const safeMsg = (d.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const isUnread = d.read === false;
-                    return `
-                        <div class="note-card" style="margin-bottom:8px; ${isUnread ? 'border-right: 3px solid var(--primary);' : ''}">
-                            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">${isUnread ? '🆕 ' : ''}${formatFeedbackDate(d.createdAt)} • ${d.email || 'אנונימי'}</p>
-                            <p style="white-space:pre-wrap;">${safeMsg}</p>
-                        </div>
-                    `;
-                }).join('');
+                renderAdminFeedbackList();
 
-                // סימון כל הפניות שהוצגו כ"נקראו", כדי שהבאדג' יתאפס
+                // סימון כל הפניות שהוצגו כ"נקראו" (לצורך איפוס באדג' ההתראה - לא קשור לסטטוס בוצע/התעלם)
                 const batch = db.batch();
                 let hasUnread = false;
-                snap.docs.forEach(doc => {
-                    if (doc.data().read === false) {
+                adminFeedbackCache.forEach(item => {
+                    if (item.read === false) {
                         hasUnread = true;
-                        batch.update(doc.ref, { read: true });
+                        batch.update(item.ref, { read: true });
+                        item.read = true;
                     }
                 });
                 if (hasUnread) {
@@ -1993,6 +2057,71 @@
             } catch (e) {
                 console.warn('שגיאה בטעינת פניות:', e);
                 container.innerHTML = '<p style="color:var(--danger); font-size:0.85rem;">שגיאה בטעינת הפניות. ודא שיש לך הרשאת admin וכללי אבטחה מתאימים ב-Firestore.</p>';
+            }
+        }
+
+        function renderAdminFeedbackList() {
+            const container = document.getElementById('admin-feedback-list');
+            if (!container) return;
+
+            if (adminFeedbackCache.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין עדיין פניות.</p>';
+                return;
+            }
+
+            let items = adminFeedbackCache.slice();
+
+            if (adminFeedbackFilter !== 'all') {
+                items = items.filter(item => (item.status || 'open') === adminFeedbackFilter);
+            }
+
+            const sortSelect = document.getElementById('admin-feedback-sort');
+            const sortMode = sortSelect ? sortSelect.value : 'date_desc';
+            items.sort((a, b) => {
+                const aTime = (a.createdAt && a.createdAt.toMillis) ? a.createdAt.toMillis() : 0;
+                const bTime = (b.createdAt && b.createdAt.toMillis) ? b.createdAt.toMillis() : 0;
+                return sortMode === 'date_asc' ? aTime - bTime : bTime - aTime;
+            });
+
+            if (items.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין פניות בסינון הנוכחי.</p>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => {
+                const safeMsg = (item.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const isUnread = item.read === false;
+                const status = item.status || 'open';
+                const statusLabel = status === 'done' ? '✅ בוצע' : status === 'dismissed' ? '🙈 התעלמתי' : '🆕 פתוח';
+                const statusColor = status === 'done' ? 'var(--success)' : status === 'dismissed' ? 'var(--text-muted)' : 'var(--primary)';
+
+                return `
+                    <div class="note-card" style="margin-bottom:8px; ${isUnread ? 'border-right: 3px solid var(--primary);' : ''}">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">📅 ${formatFeedbackDate(item.createdAt)} • ${item.email || 'אנונימי'}</p>
+                            <span style="font-size:0.75rem; font-weight:bold; color:${statusColor}; white-space:nowrap;">${statusLabel}</span>
+                        </div>
+                        <p style="white-space:pre-wrap; margin-bottom:8px;">${safeMsg}</p>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                            ${status !== 'done' ? `<button class="btn btn-secondary" style="font-size:0.75rem; padding:5px 10px;" onclick="setFeedbackStatus('${item.id}', 'done')">✅ סמן כבוצע</button>` : ''}
+                            ${status !== 'dismissed' ? `<button class="btn btn-secondary" style="font-size:0.75rem; padding:5px 10px;" onclick="setFeedbackStatus('${item.id}', 'dismissed')">🙈 התעלם</button>` : ''}
+                            ${status !== 'open' ? `<button class="btn btn-secondary" style="font-size:0.75rem; padding:5px 10px;" onclick="setFeedbackStatus('${item.id}', 'open')">↩️ החזר לפתוח</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function setFeedbackStatus(feedbackId, status) {
+            try {
+                await db.collection('feedback').doc(feedbackId).update({ status: status });
+                const item = adminFeedbackCache.find(i => i.id === feedbackId);
+                if (item) item.status = status;
+                logAppEvent('feedback_status_change', { status: status });
+                renderAdminFeedbackList();
+            } catch (e) {
+                console.warn('שגיאה בעדכון סטטוס פנייה:', e);
+                alert('שגיאה בעדכון הסטטוס. נסה שוב.');
             }
         }
 
@@ -2106,7 +2235,14 @@
         }
 
         // --- 1. ניהול קבוצות ---
+        // מונע יצירת קבוצה כפולה בטעות אם המשתמש לוחץ פעמיים מהר (למשל דאבל-קליק,
+        // או שני "נגיעות" רצופות במסך מגע) - בלי זה נוצרים שני מסמכים אמיתיים ושונים
+        // ב-Firestore עם אותו שם, שנראים כמו "קבוצה כפולה" עד ריענון
+        let isCreatingTeam = false;
+
         async function createNewTeam() {
+            if (isCreatingTeam) return;
+
             const name = document.getElementById('new-team-name').value.trim();
             const coach = document.getElementById('new-coach-name').value.trim();
             const color = document.getElementById('new-team-color').value || '#f97316';
@@ -2116,29 +2252,45 @@
                 return;
             }
 
-            const newId = 'team_' + Date.now();
-            const newTeam = {
-                id: newId,
-                ownerId: currentUser.uid,
-                ownerEmail: currentUser.email,
-                name: name,
-                coach: coach,
-                color: color,
-                players: [],
-                practices: {},
-                notes: []
-            };
+            isCreatingTeam = true;
+            const btn = document.getElementById('create-team-btn');
+            if (btn) btn.disabled = true;
 
-            const { id, ...dataToSave } = newTeam;
-            await db.collection('teams').doc(newId).set(dataToSave);
+            try {
+                const newId = 'team_' + Date.now();
+                const newTeam = {
+                    id: newId,
+                    ownerId: currentUser.uid,
+                    ownerEmail: currentUser.email,
+                    name: name,
+                    coach: coach,
+                    color: color,
+                    players: [],
+                    practices: {},
+                    notes: []
+                };
 
-            // עדכון אופטימי מקומי - הליסנר יחליף את זה ברגע שיגיע העדכון מהשרת
-            appState.teams.push(newTeam);
+                const { id, ...dataToSave } = newTeam;
+                await db.collection('teams').doc(newId).set(dataToSave);
 
-            document.getElementById('new-team-name').value = '';
-            document.getElementById('new-coach-name').value = '';
+                // עדכון אופטימי מקומי, כדי שselectTeam יעבוד מיד -
+                // עם בדיקת כפילות, כי הליסנר של onSnapshot עלול להספיק לעדכן את appState.teams
+                // (מה-cache המקומי של Firestore) עוד לפני שה-await למעלה הסתיים.
+                if (!appState.teams.find(t => t.id === newId)) {
+                    appState.teams.push(newTeam);
+                }
 
-            selectTeam(newId);
+                document.getElementById('new-team-name').value = '';
+                document.getElementById('new-coach-name').value = '';
+
+                selectTeam(newId);
+            } catch (e) {
+                console.error('שגיאה ביצירת קבוצה:', e);
+                alert('שגיאה ביצירת הקבוצה. נסה שוב.');
+            } finally {
+                isCreatingTeam = false;
+                if (btn) btn.disabled = false;
+            }
         }
 
         // --- הזמנת מאמנים חדשים (למנהל בלבד) ---
@@ -2284,6 +2436,14 @@
             if (!time) {
                 alert('נא לבחור שעת התחלה לאימון הקבוע');
                 return;
+            }
+
+            const conflict = findRecurringTimeConflict(weekday, time, endTime, null);
+            if (conflict) {
+                const proceed = confirm(
+                    `⚠️ התנגשות בשעות!\n\nכבר קיים אימון קבוע "${conflict.rule.title}" בקבוצה "${conflict.team.name}" באותו יום בשבוע, בין השעות ${formatTimeRange(conflict.rule)}.\n\nלהמשיך ולהוסיף בכל זאת?`
+                );
+                if (!proceed) return;
             }
 
             if (!team.recurringPractices) team.recurringPractices = [];
@@ -2481,6 +2641,65 @@
         function formatTimeRange(item) {
             if (!item || !item.time) return '';
             return item.endTime ? `${item.time}-${item.endTime}` : item.time;
+        }
+
+        // ============================================================
+        // בדיקת התנגשות שעות בין אימונים (אותו מאמן, אותו תאריך)
+        // ============================================================
+        function timeToMinutes(t) {
+            if (!t) return null;
+            const parts = t.split(':').map(Number);
+            if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+            return parts[0] * 60 + parts[1];
+        }
+
+        function timeRangesOverlap(startA, endA, startB, endB) {
+            const sA = timeToMinutes(startA);
+            const sB = timeToMinutes(startB);
+            if (sA === null || sB === null) return false; // בלי שעת התחלה אין מה להשוות
+
+            let eA = timeToMinutes(endA);
+            if (eA === null || eA <= sA) eA = sA + 60; // ברירת מחדל: שעה אחת אם אין שעת סיום
+
+            let eB = timeToMinutes(endB);
+            if (eB === null || eB <= sB) eB = sB + 60;
+
+            return sA < eB && sB < eA;
+        }
+
+        // בודק התנגשות מול כל האימונים (בודדים + קבועים) של המאמן הנוכחי, בכל הקבוצות שלו, באותו תאריך
+        function findPracticeTimeConflict(dateKey, startTime, endTime, excludePracticeId) {
+            if (!startTime || !currentUser) return null;
+            const myTeams = appState.teams.filter(t => t.ownerId === currentUser.uid);
+
+            for (const t of myTeams) {
+                const practices = getEffectivePracticesForDate(t, dateKey);
+                for (const p of practices) {
+                    if (p.id === excludePracticeId) continue;
+                    if (timeRangesOverlap(startTime, endTime, p.time, p.endTime)) {
+                        return { team: t, practice: p };
+                    }
+                }
+            }
+            return null;
+        }
+
+        // בודק התנגשות מול כללי אימונים קבועים אחרים באותו יום בשבוע, בכל הקבוצות של המאמן הנוכחי
+        function findRecurringTimeConflict(weekday, startTime, endTime, excludeRuleId) {
+            if (!startTime || !currentUser) return null;
+            const myTeams = appState.teams.filter(t => t.ownerId === currentUser.uid);
+
+            for (const t of myTeams) {
+                const rules = t.recurringPractices || [];
+                for (const r of rules) {
+                    if (r.id === excludeRuleId) continue;
+                    if (r.weekday !== weekday) continue;
+                    if (timeRangesOverlap(startTime, endTime, r.time, r.endTime)) {
+                        return { team: t, rule: r };
+                    }
+                }
+            }
+            return null;
         }
 
         function getWeekStart(date) {
@@ -3580,19 +3799,27 @@
             if (!Array.isArray(list)) list = [list];
 
             const practice = list.find(p => p.id === selectedPracticeId);
+            if (!practice) return;
 
-            if (practice) {
-                practice.title = document.getElementById('practice-title-input').value.trim() || 'אימון';
-                practice.time = document.getElementById('practice-time-input').value;
-                practice.endTime = document.getElementById('practice-endtime-input').value;
-                practice.location = document.getElementById('practice-location-input').value.trim();
-                practice.notes = document.getElementById('practice-notes-input').value;
-                practice.videoUrl = document.getElementById('practice-video-input').value.trim();
+            const newTime = document.getElementById('practice-time-input').value;
+            const newEndTime = document.getElementById('practice-endtime-input').value;
+
+            const conflict = findPracticeTimeConflict(selectedPracticeDateStr, newTime, newEndTime, selectedPracticeId);
+            if (conflict) {
+                const proceed = confirm(
+                    `⚠️ התנגשות בשעות!\n\nכבר קיים אימון "${conflict.practice.title}" בקבוצה "${conflict.team.name}" באותו תאריך, בין השעות ${formatTimeRange(conflict.practice)}.\n\nלהמשיך ולשמור בכל זאת?`
+                );
+                if (!proceed) return;
             }
 
-            if (practice) {
-                await syncPracticeToGoogleCalendar(practice, selectedPracticeDateStr);
-            }
+            practice.title = document.getElementById('practice-title-input').value.trim() || 'אימון';
+            practice.time = newTime;
+            practice.endTime = newEndTime;
+            practice.location = document.getElementById('practice-location-input').value.trim();
+            practice.notes = document.getElementById('practice-notes-input').value;
+            practice.videoUrl = document.getElementById('practice-video-input').value.trim();
+
+            await syncPracticeToGoogleCalendar(practice, selectedPracticeDateStr);
 
             saveState();
             alert('האימון נשמר!');
