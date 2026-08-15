@@ -668,6 +668,14 @@
                     <button id="admin-feedback-menu-item" style="display:none;" onclick="openAdminFeedbackFromBell(); closeHamburgerMenu()">
                         🔔 פניות שהתקבלו <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
                     </button>
+
+                    <div id="admin-teams-filter-menu" style="display:none;">
+                        <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
+                        <p style="font-size:0.75rem; color:var(--text-muted); padding:6px 14px 2px;">🛡️ תצוגת מנהל</p>
+                        <button id="admin-filter-mine-btn" onclick="setAdminTeamsFilter('mine')">📋 רק הקבוצות שלי <span id="admin-filter-mine-check" style="display:none;">✓</span></button>
+                        <button id="admin-filter-all-btn" onclick="setAdminTeamsFilter('all')">🌐 כל הקבוצות במערכת <span id="admin-filter-all-check" style="display:none;">✓</span></button>
+                    </div>
+
                     <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
                     <button onclick="handleLogout()">🚪 התנתק</button>
                 </div>
@@ -724,16 +732,6 @@
         <!-- ========================================== -->
         <div id="view-teams-list" class="view">
             <h2>בחר קבוצה / הגדר קבוצה חדשה</h2>
-            <div id="admin-mode-notice" class="info-box" style="display:none;">
-                🛡️ מצב מנהל: אתה יכול לראות את הקבוצות שלך בלבד או את כל הקבוצות במערכת.
-            </div>
-
-            <div id="admin-teams-filter" class="card" style="display:none; padding:10px; margin-bottom:15px;">
-                <div style="display:flex; gap:10px;">
-                    <button class="court-type-btn selected" id="admin-filter-mine-btn" style="flex:1;" onclick="setAdminTeamsFilter('mine')">📋 רק הקבוצות שלי</button>
-                    <button class="court-type-btn" id="admin-filter-all-btn" style="flex:1;" onclick="setAdminTeamsFilter('all')">🌐 כל הקבוצות במערכת</button>
-                </div>
-            </div>
 
             <div class="card" style="padding: 10px; margin-bottom: 15px;">
                 <div style="display:flex; gap:10px; margin-bottom:12px;">
@@ -1805,10 +1803,13 @@
             document.getElementById('user-email-badge').innerText = currentUser.email;
             document.getElementById('admin-role-badge').style.display = currentUserRole === 'admin' ? 'inline-block' : 'none';
             document.getElementById('header-user-info').style.display = 'flex';
-            document.getElementById('admin-mode-notice').style.display = currentUserRole === 'admin' ? 'block' : 'none';
-            document.getElementById('admin-teams-filter').style.display = currentUserRole === 'admin' ? 'block' : 'none';
+            document.getElementById('admin-teams-filter-menu').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-feedback-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
+            if (currentUserRole === 'admin') {
+                document.getElementById('admin-filter-mine-check').style.display = adminTeamsFilter === 'mine' ? 'inline' : 'none';
+                document.getElementById('admin-filter-all-check').style.display = adminTeamsFilter === 'all' ? 'inline' : 'none';
+            }
 
             subscribeToTeams();
             subscribeToFeedbackNotifications();
@@ -2025,8 +2026,8 @@
             if (currentUserRole !== 'admin') return;
             adminTeamsFilter = mode;
 
-            document.getElementById('admin-filter-mine-btn').classList.toggle('selected', mode === 'mine');
-            document.getElementById('admin-filter-all-btn').classList.toggle('selected', mode === 'all');
+            document.getElementById('admin-filter-mine-check').style.display = mode === 'mine' ? 'inline' : 'none';
+            document.getElementById('admin-filter-all-check').style.display = mode === 'all' ? 'inline' : 'none';
 
             logAppEvent('admin_teams_filter_change', { mode: mode });
             subscribeToTeams();
