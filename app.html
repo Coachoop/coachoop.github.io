@@ -506,6 +506,12 @@
             aspect-ratio: 1 / 1.15;
         }
 
+        /* מגרש שלם צריך הרבה יותר מקום אנכי כדי שיהיה אפשר בכלל לשרטט עליו -
+           בלי זה שני הסלים נדחסים לשטח כמעט ריבועי ואין שום מרחב שרטוט שימושי */
+        .canvas-stack.court-full {
+            aspect-ratio: 1 / 2.1;
+        }
+
         .canvas-stack canvas {
             touch-action: none;
             width: 100%;
@@ -1106,7 +1112,7 @@
                     <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')">🧹 מחק</button>
                 </div>
 
-                <div class="canvas-stack">
+                <div class="canvas-stack" id="canvas-stack">
                     <canvas id="courtCanvas" width="400" height="460"></canvas>
                     <canvas id="basketballCanvas" width="400" height="460"></canvas>
                 </div>
@@ -1340,6 +1346,10 @@
         // האם המשתמש בפועל צייר משהו על הקנווס בעריכה הנוכחית - נבדל מ"יש כבר canvasImg
         // שמור מקודם", כדי שנוכל להבדיל בין "לא נגעתי בכלל" לבין "כבר יש שרטוט קיים"
         let hasDrawnOnCanvas = false;
+        // האם המשתמש לחץ "נקה מגרש" בעריכה הנוכחית ולא צייר שום דבר חדש מאז - כדי
+        // שבשמירה נדע למחוק בפועל את exercise.canvasImg הישן, ולא לשמור מחדש תמונה
+        // ריקה (שעדיין "תמונה תקנית" מבחינת הדפדפן, ותגרום לתג "יש שרטוט" להישאר)
+        let canvasExplicitlyCleared = false;
         let startX = 0, startY = 0;
         let canvasSnapshot = null;
 
@@ -3834,6 +3844,7 @@
             currentCourtType = type;
             document.getElementById('btn-ex-half').classList.toggle('selected', type === 'half');
             document.getElementById('btn-ex-full').classList.toggle('selected', type === 'full');
+            document.getElementById('canvas-stack').classList.toggle('court-full', type === 'full');
             drawCourtBackground();
         }
 
@@ -3923,6 +3934,7 @@
             document.getElementById('exercise-video-input').value = '';
             document.getElementById('court-synced-notes').value = '';
             hasDrawnOnCanvas = false;
+            canvasExplicitlyCleared = false;
 
             const team = getCurrentTeam();
             let list = team.practices[selectedPracticeDateStr] || [];
@@ -3985,8 +3997,11 @@
                 exercise.type = currentCourtType;
                 // שומרים תמונת קנווס רק אם באמת צויר משהו בעריכה הזו, או שכבר היה שרטוט
                 // שמור קודם (עריכה של שרטוט קיים) - אחרת קנווס ריק (שגם הוא "תמונה" תקנית
-                // מבחינת toDataURL) היה גורם לתג "יש שרטוט" להופיע גם כשלא צוירה אף נקודה
-                if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
+                // מבחינת toDataURL) היה גורם לתג "יש שרטוט" להופיע גם כשלא צוירה אף נקודה.
+                // אם לחצו "נקה מגרש" ולא ציירו שום דבר חדש מאז - מוחקים את השרטוט הישן בפועל
+                if (canvasExplicitlyCleared) {
+                    exercise.canvasImg = null;
+                } else if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
                     exercise.canvasImg = canvas.toDataURL();
                 } else {
                     exercise.canvasImg = null;
@@ -4019,7 +4034,9 @@
                 exercise.videoUrl = document.getElementById('exercise-video-input').value.trim();
                 exercise.notes = document.getElementById('court-synced-notes').value;
                 exercise.type = currentCourtType;
-                if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
+                if (canvasExplicitlyCleared) {
+                    exercise.canvasImg = null;
+                } else if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
                     exercise.canvasImg = canvas.toDataURL();
                 } else {
                     exercise.canvasImg = null;
@@ -4065,6 +4082,8 @@
             if (confirm('האם למחוק את השרטוט?')) {
                 // מנקה רק את שכבת השרטוט - קווי המגרש הקבועים לא נפגעים
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                hasDrawnOnCanvas = false;
+                canvasExplicitlyCleared = true;
             }
         }
 
@@ -4214,6 +4233,7 @@
             e.preventDefault();
             isDrawing = true;
             hasDrawnOnCanvas = true;
+            canvasExplicitlyCleared = false;
             const pos = getPos(e);
             startX = pos.x;
             startY = pos.y;
