@@ -416,6 +416,11 @@
             background-color: #064e3b;
         }
 
+        .cal-day-cell.is-selected {
+            outline: 2px solid var(--primary);
+            outline-offset: -2px;
+        }
+
         .practice-badge {
             background: var(--success);
             color: white;
@@ -1311,6 +1316,8 @@
 
         let currentDate = new Date();
         let globalCalDate = new Date();
+        // התאריך שנלחץ לאחרונה בלוח השנה הכללי - כדי לסמן אותו ויזואלית גם אם אין בו אימון
+        let selectedGlobalDateKey = null;
         let selectedPracticeDateStr = null; // YYYY-MM-DD
         let selectedPracticeId = null;     // ID של האימון הנבחר
         let currentCourtType = 'half';
@@ -3266,7 +3273,7 @@
                 const teamsWithPractice = getTeamsWithPracticeOn(dateKey);
 
                 const cell = document.createElement('div');
-                cell.className = `cal-day-cell ${teamsWithPractice.length > 0 ? 'has-practice' : ''}`;
+                cell.className = `cal-day-cell ${teamsWithPractice.length > 0 ? 'has-practice' : ''} ${dateKey === selectedGlobalDateKey ? 'is-selected' : ''}`;
 
                 const dots = teamsWithPractice.map(t =>
                     `<span title="${t.name}" style="display:inline-block; width:9px; height:9px; border-radius:50%; background:${getTeamColor(t)}; margin:1px;"></span>`
@@ -3277,7 +3284,12 @@
                     <div style="display:flex; flex-wrap:wrap; justify-content:center; max-width:100%;">${dots}</div>
                 `;
 
-                cell.onclick = () => showGlobalDayDetails(dateKey, teamsWithPractice);
+                cell.onclick = () => {
+                    selectedGlobalDateKey = dateKey;
+                    grid.querySelectorAll('.cal-day-cell.is-selected').forEach(el => el.classList.remove('is-selected'));
+                    cell.classList.add('is-selected');
+                    showGlobalDayDetails(dateKey, teamsWithPractice);
+                };
                 grid.appendChild(cell);
             }
 
