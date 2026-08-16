@@ -1044,7 +1044,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label>הערות ודגשים לאימון/תרגיל:</label>
+                    <label>הערות ודגשים לאימון:</label>
                     <textarea id="practice-notes-input" placeholder="רשום הערות, תרגילים, מטרות..."></textarea>
                 </div>
                 <div class="form-group">
@@ -1092,7 +1092,12 @@
                 <textarea id="court-synced-notes" placeholder="הערות ספציפיות לתרגיל הזה בלבד..." style="margin-top: 6px; min-height: 60px;"></textarea>
             </div>
 
-            <div class="canvas-container">
+            <div id="canvas-add-prompt" class="card" style="padding: 14px; text-align:center; display:none;">
+                <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:10px;">אין עדיין שרטוט לתרגיל הזה</p>
+                <button class="btn btn-secondary" onclick="revealCanvasSection()">🎨 הוסף שרטוט</button>
+            </div>
+
+            <div class="canvas-container" id="canvas-section">
                 <div class="tools-bar">
                     <button class="tool-btn active" data-tool="pen" onclick="setTool('pen')">✏️ עיפרון</button>
                     <button class="tool-btn" data-tool="arrow" onclick="setTool('arrow')">🏹 חץ</button>
@@ -1580,6 +1585,11 @@
             client.requestAccessToken({ prompt: '' });
         }
 
+        // מוודא ששמירת ה-googleEventId בכל אימון/כלל מתבצעת מיד אחרי כל פריט,
+        // ולא רק פעם אחת בסוף כל הקבוצה - כדי שאם התהליך נקטע באמצע (למשל ניווט
+        // מהיר, איבוד רשת, או טעינה מחדש), לא נאבד את ה-ID של אירועים שכבר
+        // נוצרו בפועל ביומן Google - מה שהיה גורם לניסיון חיבור הבא ליצור להם
+        // כפילות (כי הוא "לא זוכר" שכבר נוצר אירוע פעם קודמת)
         async function backfillSyncAllToGoogleCalendar() {
             const stats = { created: 0, updated: 0, skipped: 0, failed: 0 };
 
@@ -1593,10 +1603,12 @@
             for (const team of appState.teams) {
                 for (const rule of (team.recurringPractices || [])) {
                     tally(await syncRecurringRuleToGoogleCalendar(rule));
+                    await saveTeamToFirestore(team);
                 }
 
                 for (const holiday of (team.holidays || [])) {
                     tally(await syncHolidayToGoogleCalendar(holiday));
+                    await saveTeamToFirestore(team);
                 }
 
                 const dateKeys = Object.keys(team.practices || {});
@@ -1605,10 +1617,9 @@
                     if (!Array.isArray(list)) list = [list];
                     for (const practice of list) {
                         tally(await syncPracticeToGoogleCalendar(practice, dateKey));
+                        await saveTeamToFirestore(team);
                     }
                 }
-
-                await saveTeamToFirestore(team);
             }
 
             console.log('[Coachoop] סיכום סנכרון ליומן Google:', stats);
@@ -3542,7 +3553,7 @@
                                 </div>
                             ` : ''}
                             ${practice.videoUrl ? `<div style="margin-top:6px;">${getVideoLinkBadge(practice.videoUrl)}</div>` : ''}
-                            <p style="font-size:0.85rem; margin-top:4px;">${practice.notes ? practice.notes.substring(0, 50) + '...' : 'ללא הערות'}</p>
+                            ${practice.notes ? `<p style="font-size:0.85rem; margin-top:4px; white-space:pre-wrap; color:var(--text-light);">📝 ${practice.notes}</p>` : ''}
                         </div>
                     </div>
                     <div class="practice-actions-row">
@@ -3823,6 +3834,7 @@
             currentCourtType = type;
             document.getElementById('btn-ex-half').classList.toggle('selected', type === 'half');
             document.getElementById('btn-ex-full').classList.toggle('selected', type === 'full');
+            drawCourtBackground();
         }
 
         async function savePracticeData(backToPracticeEdit = false) {
@@ -3937,7 +3949,21 @@
                     ctx.drawImage(img, 0, 0);
                 };
                 img.src = exercise.canvasImg;
+                // כבר יש שרטוט שמור - מציגים את הלוח ישר, בלי צורך ללחוץ "הוסף שרטוט"
+                document.getElementById('canvas-section').style.display = 'flex';
+                document.getElementById('canvas-add-prompt').style.display = 'none';
+            } else {
+                // אין עדיין שרטוט - שומרים על המסך קצר וללא גלילה מיותרת,
+                // ומציעים כפתור להוספת שרטוט רק למי שבאמת רוצה
+                document.getElementById('canvas-section').style.display = 'none';
+                document.getElementById('canvas-add-prompt').style.display = 'block';
             }
+        }
+
+        // חושף את לוח השרטוט (למי שבחר "הוסף שרטוט" לתרגיל שעדיין אין לו אחד)
+        function revealCanvasSection() {
+            document.getElementById('canvas-section').style.display = 'flex';
+            document.getElementById('canvas-add-prompt').style.display = 'none';
         }
 
         function saveExerciseData() {
