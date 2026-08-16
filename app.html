@@ -1083,8 +1083,8 @@
             </div>
 
             <div class="card" style="padding: 12px; background: #0f172a; border-color: var(--primary);">
-                <label style="color: var(--primary); font-size: 0.95rem;">📝 הערות האימון:</label>
-                <textarea id="court-synced-notes" oninput="syncNotesToPractice(this.value)" placeholder="כתוב הערות כאן והן יופיעו גם בפרטי האימון..." style="margin-top: 6px; min-height: 60px;"></textarea>
+                <label style="color: var(--primary); font-size: 0.95rem;">📝 הערות לתרגיל זה:</label>
+                <textarea id="court-synced-notes" placeholder="הערות ספציפיות לתרגיל הזה בלבד..." style="margin-top: 6px; min-height: 60px;"></textarea>
             </div>
 
             <div class="canvas-container">
@@ -1114,6 +1114,7 @@
             </div>
 
             <div class="actions-row">
+                <button class="btn btn-secondary" onclick="saveExerciseDataInPlace()">💾 שמור תרגיל</button>
                 <button class="btn" onclick="saveExerciseData()">שמור וחזור לאימון</button>
                 <button class="btn btn-secondary" onclick="showView('view-practice-edit')">חזרה לעריכת אימון</button>
             </div>
@@ -3603,11 +3604,10 @@
             }
 
             const newId = 'prc_' + Date.now();
-            const count = team.practices[selectedPracticeDateStr].length + 1;
 
             const newPractice = {
                 id: newId,
-                title: `תרגיל / אימון ${count}`,
+                title: 'אימון',
                 time: '',
                 endTime: '',
                 location: '',
@@ -3659,6 +3659,8 @@
                     id: 'ex_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
                     title: ex.title,
                     type: ex.type || 'half',
+                    videoUrl: ex.videoUrl || '',
+                    notes: ex.notes || '',
                     canvasImg: ex.canvasImg || null
                 }))
             };
@@ -3780,7 +3782,8 @@
                 title: `תרגיל ${practice.exercises.length + 1}`,
                 type: 'half',
                 canvasImg: null,
-                videoUrl: ''
+                videoUrl: '',
+                notes: ''
             };
             practice.exercises.push(newExercise);
             logAppEvent('create_drill', { team_id: team.id || null });
@@ -3894,6 +3897,7 @@
             // לא יישאר על המסך טקסט/מצב שריד מעריכת תרגיל קודם, גם אם משהו למטה נכשל
             document.getElementById('exercise-title-input').value = '';
             document.getElementById('exercise-video-input').value = '';
+            document.getElementById('court-synced-notes').value = '';
             hasDrawnOnCanvas = false;
 
             const team = getCurrentTeam();
@@ -3909,7 +3913,7 @@
             document.getElementById('court-title').innerText = `שרטוט - ${practice.title || 'אימון'}`;
             document.getElementById('exercise-title-input').value = exercise.title || '';
             document.getElementById('exercise-video-input').value = exercise.videoUrl || '';
-            document.getElementById('court-synced-notes').value = practice.notes || '';
+            document.getElementById('court-synced-notes').value = exercise.notes || '';
             setExerciseCourtType(exercise.type || 'half');
 
             drawCourtBackground();
@@ -3939,6 +3943,7 @@
             if (exercise) {
                 exercise.title = document.getElementById('exercise-title-input').value.trim() || exercise.title || 'תרגיל';
                 exercise.videoUrl = document.getElementById('exercise-video-input').value.trim();
+                exercise.notes = document.getElementById('court-synced-notes').value;
                 exercise.type = currentCourtType;
                 // שומרים תמונת קנווס רק אם באמת צויר משהו בעריכה הזו, או שכבר היה שרטוט
                 // שמור קודם (עריכה של שרטוט קיים) - אחרת קנווס ריק (שגם הוא "תמונה" תקנית
@@ -3950,9 +3955,6 @@
                 }
             }
 
-            // סנכרון הערות האימון הכלליות גם אם נערכו מתוך מסך השרטוט
-            practice.notes = document.getElementById('court-synced-notes').value;
-
             saveState();
             alert('התרגיל נשמר!');
 
@@ -3960,8 +3962,35 @@
             renderExercisesList();
         }
 
-        function syncNotesToPractice(val) {
-            document.getElementById('practice-notes-input').value = val;
+        // שמירת התרגיל בלבד, בלי לצאת ממסך השרטוט - שימושי כדי להמשיך לצייר/לערוך
+        // מיד אחרי שמירה, בלי לחזור למסך האימון ולפתוח את התרגיל מחדש
+        function saveExerciseDataInPlace() {
+            const team = getCurrentTeam();
+            if (!team || !selectedPracticeDateStr || !selectedPracticeId || !selectedExerciseId) return;
+
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            if (!practice) return;
+
+            migratePracticeToExercises(practice);
+            const exercise = practice.exercises.find(e => e.id === selectedExerciseId);
+
+            if (exercise) {
+                exercise.title = document.getElementById('exercise-title-input').value.trim() || exercise.title || 'תרגיל';
+                exercise.videoUrl = document.getElementById('exercise-video-input').value.trim();
+                exercise.notes = document.getElementById('court-synced-notes').value;
+                exercise.type = currentCourtType;
+                if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
+                    exercise.canvasImg = canvas.toDataURL();
+                } else {
+                    exercise.canvasImg = null;
+                }
+            }
+
+            saveState();
+            renderExercisesList();
+            showFeedbackToast('💾 התרגיל נשמר');
         }
 
         // הקנווס
