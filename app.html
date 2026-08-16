@@ -400,6 +400,11 @@
             border-color: var(--primary);
         }
 
+        .cal-day-cell.is-today {
+            outline: 2px solid var(--info);
+            outline-offset: -2px;
+        }
+
         .cal-day-cell.empty {
             background: transparent;
             border: none;
@@ -1319,6 +1324,9 @@
         let currentTool = 'pen';
         let currentColor = '#3b82f6';
         let isDrawing = false;
+        // האם המשתמש בפועל צייר משהו על הקנווס בעריכה הנוכחית - נבדל מ"יש כבר canvasImg
+        // שמור מקודם", כדי שנוכל להבדיל בין "לא נגעתי בכלל" לבין "כבר יש שרטוט קיים"
+        let hasDrawnOnCanvas = false;
         let startX = 0, startY = 0;
         let canvasSnapshot = null;
 
@@ -2815,6 +2823,7 @@
 
             const firstDayIndex = new Date(year, month, 1).getDay();
             const totalDays = new Date(year, month + 1, 0).getDate();
+            const todayKey = formatDateKey(new Date());
 
             for (let i = 0; i < firstDayIndex; i++) {
                 const emptyCell = document.createElement('div');
@@ -2831,9 +2840,10 @@
                 const count = practicesList.length;
                 const timesText = practicesList.filter(p => p.time).map(p => formatTimeRange(p)).join(', ');
                 const holiday = getHolidayInfo(currentTeam, dateKey);
+                const isToday = dateKey === todayKey;
 
                 const cell = document.createElement('div');
-                cell.className = `cal-day-cell ${count > 0 ? 'has-practice' : ''}`;
+                cell.className = `cal-day-cell ${count > 0 ? 'has-practice' : ''} ${isToday ? 'is-today' : ''}`;
                 if (holiday) {
                     cell.style.backgroundColor = '#334155';
                     cell.style.opacity = '0.7';
@@ -3880,6 +3890,12 @@
             selectedExerciseId = exerciseId;
             showView('view-court');
 
+            // איפוס מיידי וללא-תנאי של הטופס - לפני כל חיפוש נתונים - כדי שלעולם
+            // לא יישאר על המסך טקסט/מצב שריד מעריכת תרגיל קודם, גם אם משהו למטה נכשל
+            document.getElementById('exercise-title-input').value = '';
+            document.getElementById('exercise-video-input').value = '';
+            hasDrawnOnCanvas = false;
+
             const team = getCurrentTeam();
             let list = team.practices[selectedPracticeDateStr] || [];
             if (!Array.isArray(list)) list = [list];
@@ -3924,8 +3940,13 @@
                 exercise.title = document.getElementById('exercise-title-input').value.trim() || exercise.title || 'תרגיל';
                 exercise.videoUrl = document.getElementById('exercise-video-input').value.trim();
                 exercise.type = currentCourtType;
-                if (canvas) {
+                // שומרים תמונת קנווס רק אם באמת צויר משהו בעריכה הזו, או שכבר היה שרטוט
+                // שמור קודם (עריכה של שרטוט קיים) - אחרת קנווס ריק (שגם הוא "תמונה" תקנית
+                // מבחינת toDataURL) היה גורם לתג "יש שרטוט" להופיע גם כשלא צוירה אף נקודה
+                if (canvas && (hasDrawnOnCanvas || exercise.canvasImg)) {
                     exercise.canvasImg = canvas.toDataURL();
+                } else {
+                    exercise.canvasImg = null;
                 }
             }
 
@@ -4125,6 +4146,7 @@
         function startDrawing(e) {
             e.preventDefault();
             isDrawing = true;
+            hasDrawnOnCanvas = true;
             const pos = getPos(e);
             startX = pos.x;
             startY = pos.y;
