@@ -4140,7 +4140,7 @@
 
             // מצייר סל שלם: לוח, חישוק, וסימוני ליין משני צידי אזור הצבע
             // dir = 1 (הסל למעלה, אזור הצבע נפתח כלפי מטה) או -1 (הסל למטה, נפתח כלפי מעלה)
-            function drawBasketEnd(baselineY, dir, keyW, keyH, threeR, cornerX) {
+            function drawBasketEnd(baselineY, dir, keyW, keyH, threeR, cornerX, ftRadius) {
                 const cx = w / 2;
                 const keyNearY = baselineY;              // קצה אזור הצבע הצמוד לבסיס
                 const keyFarY = baselineY + dir * keyH;   // קצה אזור הצבע ליד קו הזריקות החופשיות
@@ -4185,10 +4185,12 @@
                 courtCtx.arc(cx, hoopY, 8, 0, 2 * Math.PI);
                 courtCtx.stroke();
 
-                // עיגול הזריקות החופשיות - מעגל שלם (לא רק חצי), כמו בתמונת הרפרנס
+                // עיגול הזריקות החופשיות - מעגל שלם, ברדיוס שמתקבל כפרמטר אם צוין
+                // (כדי לא לשנות בטעות את מגרש שלם, ששם זה כבר נראה טוב), אחרת נופל
+                // חזרה לרדיוס הישן keyW/2
                 courtCtx.lineWidth = 3;
                 courtCtx.beginPath();
-                courtCtx.arc(cx, keyFarY, keyW / 2, 0, 2 * Math.PI);
+                courtCtx.arc(cx, keyFarY, ftRadius || (keyW / 2), 0, 2 * Math.PI);
                 courtCtx.stroke();
 
                 // קו שלוש הנקודות - קטעי פינה ישרים (corner three) + קשת ביניהם
@@ -4216,7 +4218,7 @@
             }
 
             if (currentCourtType === 'half') {
-                drawBasketEnd(14, 1, 160, 190, 230, 200);
+                drawBasketEnd(14, 1, 160, 190, 245, 200, 60);
 
                 // סימוני חצי מגרש על קווי הצד, בקירוב לקו האמצע
                 courtCtx.lineWidth = 3;
