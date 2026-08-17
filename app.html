@@ -503,13 +503,7 @@
             position: relative;
             width: 100%;
             max-width: 480px;
-            aspect-ratio: 1 / 1.15;
-        }
-
-        /* מגרש שלם צריך הרבה יותר מקום אנכי כדי שיהיה אפשר בכלל לשרטט עליו -
-           בלי זה שני הסלים נדחסים לשטח כמעט ריבועי ואין שום מרחב שרטוט שימושי */
-        .canvas-stack.court-full {
-            aspect-ratio: 1 / 2.1;
+            aspect-ratio: 480 / 450;
         }
 
         .canvas-stack canvas {
@@ -1113,8 +1107,8 @@
                 </div>
 
                 <div class="canvas-stack" id="canvas-stack">
-                    <canvas id="courtCanvas" width="400" height="460"></canvas>
-                    <canvas id="basketballCanvas" width="400" height="460"></canvas>
+                    <canvas id="courtCanvas" width="480" height="450"></canvas>
+                    <canvas id="basketballCanvas" width="480" height="450"></canvas>
                 </div>
                 
                 <div class="canvas-bottom-bar">
@@ -3844,7 +3838,7 @@
             currentCourtType = type;
             document.getElementById('btn-ex-half').classList.toggle('selected', type === 'half');
             document.getElementById('btn-ex-full').classList.toggle('selected', type === 'full');
-            document.getElementById('canvas-stack').classList.toggle('court-full', type === 'full');
+            resizeCourtCanvases(type);
             drawCourtBackground();
         }
 
@@ -4049,6 +4043,23 @@
         }
 
         // הקנווס
+        // מידות הקנווס - מותאמות ליחסים אמיתיים של מגרש כדורסל (לא ריבוע מאולץ),
+        // בדיוק כמו בתמונות הרפרנס: חצי מגרש רחב יחסית (כמעט ריבוע), מגרש שלם גבוה ומוארך
+        const HALF_COURT_W = 480;
+        const HALF_COURT_H = 450;
+        const FULL_COURT_W = 400;
+        const FULL_COURT_H = 700;
+
+        function resizeCourtCanvases(type) {
+            const w = type === 'full' ? FULL_COURT_W : HALF_COURT_W;
+            const h = type === 'full' ? FULL_COURT_H : HALF_COURT_H;
+            courtCanvas.width = w;
+            courtCanvas.height = h;
+            canvas.width = w;
+            canvas.height = h;
+            document.getElementById('canvas-stack').style.aspectRatio = `${w} / ${h}`;
+        }
+
         function initCanvas() {
             courtCanvas = document.getElementById('courtCanvas');
             courtCtx = courtCanvas.getContext('2d');
@@ -4087,17 +4098,44 @@
             }
         }
 
+        // רקע דמוי-עץ (פרקט) במקום צבע אחיד שטוח - שכבת גרדיאנט + "סיבי עץ" עדינים
+        function drawWoodBackground(w, h) {
+            const grad = courtCtx.createLinearGradient(0, 0, w, 0);
+            grad.addColorStop(0, '#dc9c56');
+            grad.addColorStop(0.5, '#eab06a');
+            grad.addColorStop(1, '#d89552');
+            courtCtx.fillStyle = grad;
+            courtCtx.fillRect(0, 0, w, h);
+
+            courtCtx.save();
+            courtCtx.globalAlpha = 0.10;
+            courtCtx.strokeStyle = '#8b5a2b';
+            const grainCount = Math.round(w / 16);
+            for (let i = 0; i < grainCount; i++) {
+                const baseX = (i + 0.5) * (w / grainCount);
+                courtCtx.beginPath();
+                courtCtx.lineWidth = 1 + (i % 3) * 0.6;
+                courtCtx.moveTo(baseX, 0);
+                const segments = 7;
+                for (let s = 1; s <= segments; s++) {
+                    const y = (h / segments) * s;
+                    const wobble = Math.sin(s * 1.6 + i * 0.7) * 5;
+                    courtCtx.lineTo(baseX + wobble, y);
+                }
+                courtCtx.stroke();
+            }
+            courtCtx.restore();
+        }
+
         function drawCourtBackground() {
-            courtCtx.clearRect(0, 0, courtCanvas.width, courtCanvas.height);
-            courtCtx.fillStyle = '#d97706';
-            courtCtx.fillRect(0, 0, courtCanvas.width, courtCanvas.height);
-
-            courtCtx.strokeStyle = '#ffffff';
-            courtCtx.lineWidth = 3;
-
             const w = courtCanvas.width;
             const h = courtCanvas.height;
 
+            courtCtx.clearRect(0, 0, w, h);
+            drawWoodBackground(w, h);
+
+            courtCtx.strokeStyle = '#ffffff';
+            courtCtx.lineWidth = 3;
             courtCtx.strokeRect(10, 10, w - 20, h - 20);
 
             // מצייר סל שלם: לוח, חישוק, וסימוני ליין משני צידי אזור הצבע
@@ -4113,103 +4151,108 @@
                 courtCtx.lineWidth = 3;
                 courtCtx.strokeRect(keyX1, Math.min(keyNearY, keyFarY), keyW, keyH);
 
-                // סימוני ליין (lane space marks) משני צידי אזור הצבע
+                // סימוני ליין (lane space marks) משני צידי אזור הצבע - 4 זוגות, כמו במגרש אמיתי
                 courtCtx.lineWidth = 2;
-                [0.35, 0.55].forEach((f) => {
+                [0.22, 0.38, 0.54, 0.70].forEach((f) => {
                     const yMark = baselineY + dir * keyH * f;
                     courtCtx.beginPath();
-                    courtCtx.moveTo(keyX1 - 5, yMark);
+                    courtCtx.moveTo(keyX1 - 6, yMark);
                     courtCtx.lineTo(keyX1, yMark);
                     courtCtx.moveTo(keyX2, yMark);
-                    courtCtx.lineTo(keyX2 + 5, yMark);
+                    courtCtx.lineTo(keyX2 + 6, yMark);
                     courtCtx.stroke();
                 });
 
-                // הלוח (backboard)
-                const boardY = baselineY + dir * 14;
+                // הלוח (backboard) עם רגל תמיכה קצרה למרכז, כמו בתמונת הרפרנס
+                const boardY = baselineY + dir * 16;
+                const poleY = baselineY + dir * 8;
                 courtCtx.lineWidth = 3;
                 courtCtx.beginPath();
-                courtCtx.moveTo(cx - 22, boardY);
-                courtCtx.lineTo(cx + 22, boardY);
+                courtCtx.moveTo(cx - 24, boardY);
+                courtCtx.lineTo(cx + 24, boardY);
+                courtCtx.stroke();
+
+                courtCtx.lineWidth = 2;
+                courtCtx.beginPath();
+                courtCtx.moveTo(cx, boardY);
+                courtCtx.lineTo(cx, poleY);
                 courtCtx.stroke();
 
                 // החישוק (rim)
-                const hoopY = baselineY + dir * 20;
+                const hoopY = baselineY + dir * 22;
                 courtCtx.lineWidth = 2.5;
                 courtCtx.beginPath();
-                courtCtx.arc(cx, hoopY, 7, 0, 2 * Math.PI);
+                courtCtx.arc(cx, hoopY, 8, 0, 2 * Math.PI);
                 courtCtx.stroke();
 
-                // עיגול הזריקות החופשיות - רק החצי הרחוק מהסל
+                // עיגול הזריקות החופשיות - מעגל שלם (לא רק חצי), כמו בתמונת הרפרנס
                 courtCtx.lineWidth = 3;
                 courtCtx.beginPath();
-                if (dir === 1) {
-                    courtCtx.arc(cx, keyFarY, keyW / 2, 0, Math.PI);
-                } else {
-                    courtCtx.arc(cx, keyFarY, keyW / 2, Math.PI, 2 * Math.PI);
-                }
+                courtCtx.arc(cx, keyFarY, keyW / 2, 0, 2 * Math.PI);
                 courtCtx.stroke();
 
-                // קו שלוש הנקודות
-                if (cornerX) {
-                    // קטעי פינה ישרים (corner three) + קשת ביניהם, קרובה יותר ל"בקבוק"
-                    const vertReach = Math.sqrt(threeR * threeR - cornerX * cornerX);
-                    const transY = hoopY + dir * vertReach;
-                    const cornerLeftX = cx - cornerX;
-                    const cornerRightX = cx + cornerX;
+                // קו שלוש הנקודות - קטעי פינה ישרים (corner three) + קשת ביניהם
+                const vertReach = Math.sqrt(threeR * threeR - cornerX * cornerX);
+                const transY = hoopY + dir * vertReach;
+                const cornerLeftX = cx - cornerX;
+                const cornerRightX = cx + cornerX;
 
-                    courtCtx.beginPath();
-                    courtCtx.moveTo(cornerLeftX, baselineY);
-                    courtCtx.lineTo(cornerLeftX, transY);
-                    courtCtx.moveTo(cornerRightX, baselineY);
-                    courtCtx.lineTo(cornerRightX, transY);
-                    courtCtx.stroke();
+                courtCtx.lineWidth = 3;
+                courtCtx.beginPath();
+                courtCtx.moveTo(cornerLeftX, baselineY);
+                courtCtx.lineTo(cornerLeftX, transY);
+                courtCtx.moveTo(cornerRightX, baselineY);
+                courtCtx.lineTo(cornerRightX, transY);
+                courtCtx.stroke();
 
-                    const angle = Math.acos(cornerX / threeR);
-                    courtCtx.beginPath();
-                    if (dir === 1) {
-                        courtCtx.arc(cx, hoopY, threeR, angle, Math.PI - angle);
-                    } else {
-                        courtCtx.arc(cx, hoopY, threeR, Math.PI + angle, 2 * Math.PI - angle);
-                    }
-                    courtCtx.stroke();
+                const angle = Math.acos(cornerX / threeR);
+                courtCtx.beginPath();
+                if (dir === 1) {
+                    courtCtx.arc(cx, hoopY, threeR, angle, Math.PI - angle);
                 } else {
-                    // קשת שנפגשת ישירות עם קווי הצד
-                    const cosVal = (w / 2 - 10) / threeR;
-                    const baseAngle = Math.acos(Math.min(0.999, cosVal));
-                    courtCtx.beginPath();
-                    if (dir === 1) {
-                        courtCtx.arc(cx, hoopY, threeR, baseAngle, Math.PI - baseAngle);
-                    } else {
-                        courtCtx.arc(cx, hoopY, threeR, Math.PI + baseAngle, 2 * Math.PI - baseAngle);
-                    }
-                    courtCtx.stroke();
+                    courtCtx.arc(cx, hoopY, threeR, Math.PI + angle, 2 * Math.PI - angle);
                 }
+                courtCtx.stroke();
             }
 
             if (currentCourtType === 'half') {
-                drawBasketEnd(10, 1, 138, 150, 200);
+                drawBasketEnd(14, 1, 160, 190, 230, 200);
 
-                // סימוני חצי מגרש על קווי הצד
+                // סימוני חצי מגרש על קווי הצד, בקירוב לקו האמצע
                 courtCtx.lineWidth = 3;
+                const midMarkY = h - 40;
                 courtCtx.beginPath();
-                courtCtx.moveTo(10, 235);
-                courtCtx.lineTo(20, 235);
-                courtCtx.moveTo(w - 10, 235);
-                courtCtx.lineTo(w - 20, 235);
+                courtCtx.moveTo(10, midMarkY);
+                courtCtx.lineTo(20, midMarkY);
+                courtCtx.moveTo(w - 10, midMarkY);
+                courtCtx.lineTo(w - 20, midMarkY);
+                courtCtx.stroke();
+
+                // פס עליון של מעגל האמצע, נחתך בתחתית התמונה - כמו ברפרנס
+                courtCtx.beginPath();
+                courtCtx.arc(w / 2, h + 5, 55, Math.PI, 2 * Math.PI);
                 courtCtx.stroke();
             } else {
+                courtCtx.lineWidth = 3;
                 courtCtx.beginPath();
                 courtCtx.moveTo(10, h / 2);
                 courtCtx.lineTo(w - 10, h / 2);
                 courtCtx.stroke();
 
                 courtCtx.beginPath();
-                courtCtx.arc(w / 2, h / 2, 35, 0, 2 * Math.PI);
+                courtCtx.arc(w / 2, h / 2, 48, 0, 2 * Math.PI);
                 courtCtx.stroke();
 
-                drawBasketEnd(10, 1, 90, 80, 145, 115);
-                drawBasketEnd(h - 10, -1, 90, 80, 145, 115);
+                // סימוני קו אמצע על קווי הצד
+                courtCtx.beginPath();
+                courtCtx.moveTo(0, h / 2);
+                courtCtx.lineTo(10, h / 2);
+                courtCtx.moveTo(w - 10, h / 2);
+                courtCtx.lineTo(w, h / 2);
+                courtCtx.stroke();
+
+                drawBasketEnd(14, 1, 130, 140, 190, 165);
+                drawBasketEnd(h - 14, -1, 130, 140, 190, 165);
             }
         }
 
