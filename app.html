@@ -1089,7 +1089,7 @@
 
             <div class="card" style="padding: 12px; background: #0f172a; border-color: var(--primary);">
                 <label style="color: var(--primary); font-size: 0.95rem;">📝 הערות לתרגיל זה:</label>
-                <textarea id="court-synced-notes" placeholder="הערות ספציפיות לתרגיל הזה בלבד..." style="margin-top: 6px; min-height: 60px;"></textarea>
+                <textarea id="court-synced-notes" oninput="autoGrowTextarea(this)" placeholder="הערות ספציפיות לתרגיל הזה בלבד..." style="margin-top: 6px; min-height: 60px; overflow:hidden; resize:none;"></textarea>
             </div>
 
             <div id="canvas-add-prompt" class="card" style="padding: 14px; text-align:center; display:none;">
@@ -3551,7 +3551,7 @@
                                 <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
                                     ${practice.exercises.map(ex => `
                                         <span onclick="event.stopPropagation(); openExerciseFromDayList('${practice.id}', '${ex.id}')" style="cursor:pointer; background:#0f172a; border:1px solid var(--border-color); border-radius:6px; padding:4px 10px; font-size:0.8rem; color:var(--info);">
-                                            🎨 ${ex.title || 'תרגיל'}${ex.videoUrl ? ' 🎥' : ''}
+                                            ${ex.canvasImg ? '🎨 ' : ''}${ex.title || 'תרגיל'}${ex.videoUrl ? ' 🎥' : ''}
                                         </span>
                                     `).join('')}
                                 </div>
@@ -3834,6 +3834,14 @@
             renderExercisesList();
         }
 
+        // מגדילה textarea אוטומטית לגובה שמתאים בדיוק לתוכן שלה, כדי שלעולם לא תהיה
+        // גלילה פנימית בתוך התיבה עצמה - כל מה שכתוב תמיד גלוי במלואו
+        function autoGrowTextarea(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
+        }
+
         function setExerciseCourtType(type) {
             currentCourtType = type;
             document.getElementById('btn-ex-half').classList.toggle('selected', type === 'half');
@@ -3927,6 +3935,7 @@
             document.getElementById('exercise-title-input').value = '';
             document.getElementById('exercise-video-input').value = '';
             document.getElementById('court-synced-notes').value = '';
+            document.getElementById('court-synced-notes').style.height = 'auto';
             hasDrawnOnCanvas = false;
             canvasExplicitlyCleared = false;
 
@@ -3944,6 +3953,7 @@
             document.getElementById('exercise-title-input').value = exercise.title || '';
             document.getElementById('exercise-video-input').value = exercise.videoUrl || '';
             document.getElementById('court-synced-notes').value = exercise.notes || '';
+            autoGrowTextarea(document.getElementById('court-synced-notes'));
             setExerciseCourtType(exercise.type || 'half');
 
             drawCourtBackground();
