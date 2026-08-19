@@ -3042,7 +3042,10 @@
             const practiceLineH = 30;
             const minRowH = 62;
             const rowPadding = 18;
-            const contentRightX = width - 195;
+            // סדר עמודות (RTL, מימין לשמאל): תאריך > יום > תוכן
+            const dateColX = width - 35;
+            const dayColX = width - 110;
+            const contentRightX = width - 230;
             const contentMaxWidth = contentRightX - 100;
 
             const measureCanvas = document.createElement('canvas');
@@ -3111,8 +3114,6 @@
 
             // שורות הימים
             let y = headerHeight;
-            const dayNameX = width - 55;
-            const dateX = 55;
 
             days.forEach((day, index) => {
                 const rowH = day.rowHeight;
@@ -3123,17 +3124,17 @@
                 ctx.fillStyle = isEven ? '#1e293b' : '#0f172a';
                 ctx.fillRect(30, y, width - 60, rowBoxH);
 
-                // שם היום (מימין, ממורכז אנכית)
+                // תאריך - עמודה ימנית ביותר, לבן
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${day.date.getDate()}/${day.date.getMonth() + 1}`, dateColX, centerY + 6);
+
+                // שם היום - העמודה הבאה, לבן
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 20px Arial';
                 ctx.textAlign = 'right';
-                ctx.fillText(`יום ${day.weekdayName}`, dayNameX, centerY + 7);
-
-                // תאריך (משמאל, ממורכז אנכית)
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = '15px Arial';
-                ctx.textAlign = 'left';
-                ctx.fillText(`${day.date.getDate()}/${day.date.getMonth() + 1}`, dateX, centerY + 5);
+                ctx.fillText(`יום ${day.weekdayName}`, dayColX, centerY + 7);
 
                 // תוכן (מיושר לימין באותה עמודה קבועה - כולל שורות שגלשו)
                 ctx.textAlign = 'right';
@@ -3152,6 +3153,7 @@
                         ctx.fillText(line, contentRightX, blockStartY + (lineIndex * practiceLineH));
                     });
                 } else {
+                    // אין אימון - נשאר באפור, כמו קודם
                     ctx.fillStyle = '#475569';
                     ctx.font = '17px Arial';
                     ctx.fillText('אין אימון', contentRightX, centerY + 6);
