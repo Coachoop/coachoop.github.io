@@ -4577,15 +4577,25 @@
             return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="vertical-align:middle;"><path fill="#25D366" d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.48 1.32 5L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.87 9.87 0 0012.04 2m5.71 14.02c-.24.68-1.4 1.33-1.93 1.4-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.65-.61-2.91-1.26-4.81-4.17-4.96-4.36-.15-.2-1.19-1.58-1.19-3.02s.76-2.14 1.03-2.44c.27-.29.59-.36.79-.36.2 0 .4 0 .57.01.18.01.43-.07.68.51.24.58.83 2 .9 2.15.07.15.12.32.02.52-.1.2-.15.32-.29.5-.15.17-.31.38-.44.51-.15.15-.3.31-.13.6.17.29.76 1.25 1.63 2.02 1.12.99 2.07 1.3 2.36 1.44.29.15.46.13.63-.08.17-.2.72-.84.91-1.13.19-.29.39-.24.66-.14.27.1 1.7.8 1.99.95.29.15.48.22.55.34.08.13.08.72-.16 1.41z"/></svg>`;
         }
 
-        function phoneActionLinks(phone) {
-            if (!phone) return '';
-            const telDigits = phone.replace(/[^0-9+]/g, '');
-            const waDigits = toWhatsappDigits(phone);
-            // padding נדיב סביב כל אייקון (טווח נגיעה נוח באצבע במובייל), ומרווח גדול בין השניים
-            return ` <span style="display:inline-flex; align-items:center; gap:14px; margin-right:4px; vertical-align:middle;">
-                <a href="tel:${telDigits}" style="color:var(--info); text-decoration:none; padding:8px; display:inline-flex; align-items:center;" title="התקשר">📞</a>
-                <a href="https://wa.me/${waDigits}" target="_blank" rel="noopener" style="text-decoration:none; padding:8px; display:inline-flex; align-items:center;" title="שלח הודעת וואטסאפ">${whatsappIconSvg(22)}</a>
-            </span>`;
+        // שורת "טקסט + אייקוני פעולה" בנויה כשורת flex אחת - טקסט מתכווץ/נחתך
+        // (ellipsis) אם צריך, אבל האייקונים תמיד נשארים מקובעים בקצה, על אותה
+        // שורה בדיוק. בלי זה (כשהאייקונים היו בסוף אותה פסקת טקסט רגילה), במסכי
+        // מובייל צרים כל בלוק האייקונים "קפץ" לשורה חדשה כשלא היה להם מקום -
+        // ומשאיר רווח ריק בסוף השורה הקודמת
+        function phoneRow(iconEmoji, text, phone) {
+            if (!text) return '';
+            const actionsHtml = phone ? `
+                <span style="display:inline-flex; align-items:center; gap:10px; flex-shrink:0; margin-right:8px;">
+                    <a href="tel:${phone.replace(/[^0-9+]/g, '')}" style="color:var(--info); text-decoration:none; padding:6px; display:inline-flex; align-items:center;" title="התקשר">📞</a>
+                    <a href="https://wa.me/${toWhatsappDigits(phone)}" target="_blank" rel="noopener" style="text-decoration:none; padding:6px; display:inline-flex; align-items:center;" title="שלח הודעת וואטסאפ">${whatsappIconSvg(20)}</a>
+                </span>
+            ` : '';
+            return `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:4px;">
+                    <span style="font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${iconEmoji} ${text}</span>
+                    ${actionsHtml}
+                </div>
+            `;
         }
 
         function renderPlayersList() {
@@ -4610,13 +4620,13 @@
                 item.style.alignItems = 'flex-start';
 
                 const phoneLine = p.phone
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">📱 ${p.phone}${phoneActionLinks(p.phone)}</p>`
+                    ? phoneRow('📱', p.phone, p.phone)
                     : '';
                 const parent1Line = (p.parent1Name || p.parent1Phone)
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent1Name || 'הורה 1'}${p.parent1Phone ? ' - ' + p.parent1Phone + phoneActionLinks(p.parent1Phone) : ''}</p>`
+                    ? phoneRow('👪', `${p.parent1Name || 'הורה 1'}${p.parent1Phone ? ' - ' + p.parent1Phone : ''}`, p.parent1Phone)
                     : '';
                 const parent2Line = (p.parent2Name || p.parent2Phone)
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent2Name || 'הורה 2'}${p.parent2Phone ? ' - ' + p.parent2Phone + phoneActionLinks(p.parent2Phone) : ''}</p>`
+                    ? phoneRow('👪', `${p.parent2Name || 'הורה 2'}${p.parent2Phone ? ' - ' + p.parent2Phone : ''}`, p.parent2Phone)
                     : '';
 
                 let notesHtml = '';
