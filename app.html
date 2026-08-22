@@ -4552,6 +4552,24 @@
             renderPlayersList();
         }
 
+        // ============================================================
+        // עזר ליצירת קישורי התקשרות ו-WhatsApp ליד מספרי טלפון בסגל
+        // ============================================================
+        function toWhatsappDigits(phone) {
+            let digits = (phone || '').replace(/[^0-9]/g, '');
+            if (digits.startsWith('0')) {
+                digits = '972' + digits.substring(1); // הופך 05X... לפורמט בינלאומי 972...
+            }
+            return digits;
+        }
+
+        function phoneActionLinks(phone) {
+            if (!phone) return '';
+            const telDigits = phone.replace(/[^0-9+]/g, '');
+            const waDigits = toWhatsappDigits(phone);
+            return ` <a href="tel:${telDigits}" style="color:var(--info); text-decoration:none;" title="התקשר">📞</a> <a href="https://wa.me/${waDigits}" target="_blank" rel="noopener" style="color:#25D366; text-decoration:none;" title="שלח הודעת וואטסאפ">💬</a>`;
+        }
+
         function renderPlayersList() {
             const container = document.getElementById('players-container');
             container.innerHTML = '';
@@ -4574,13 +4592,13 @@
                 item.style.alignItems = 'flex-start';
 
                 const phoneLine = p.phone
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">📞 <a href="tel:${p.phone.replace(/[^0-9+]/g, '')}" style="color:var(--info);">${p.phone}</a></p>`
+                    ? `<p style="font-size:0.85rem; margin-top:4px;">📱 ${p.phone}${phoneActionLinks(p.phone)}</p>`
                     : '';
                 const parent1Line = (p.parent1Name || p.parent1Phone)
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent1Name || 'הורה 1'}${p.parent1Phone ? ' - <a href="tel:' + p.parent1Phone.replace(/[^0-9+]/g, '') + '" style="color:var(--info);">' + p.parent1Phone + '</a>' : ''}</p>`
+                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent1Name || 'הורה 1'}${p.parent1Phone ? ' - ' + p.parent1Phone + phoneActionLinks(p.parent1Phone) : ''}</p>`
                     : '';
                 const parent2Line = (p.parent2Name || p.parent2Phone)
-                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent2Name || 'הורה 2'}${p.parent2Phone ? ' - <a href="tel:' + p.parent2Phone.replace(/[^0-9+]/g, '') + '" style="color:var(--info);">' + p.parent2Phone + '</a>' : ''}</p>`
+                    ? `<p style="font-size:0.85rem; margin-top:4px;">👪 ${p.parent2Name || 'הורה 2'}${p.parent2Phone ? ' - ' + p.parent2Phone + phoneActionLinks(p.parent2Phone) : ''}</p>`
                     : '';
 
                 let notesHtml = '';
