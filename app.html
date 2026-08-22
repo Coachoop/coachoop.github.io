@@ -30,6 +30,11 @@
             margin: 0;
             padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            /* מונע מדפדפני מובייל (בעיקר iOS Safari) "לנחש" ולהגדיל טקסט אוטומטית
+               בהתאם לכמות התוכן בתא - זו הסיבה שמספרי ימים בלוח השנה נראו בגדלים
+               שונים בין תא עם אימון (עם עוד תוכן) לתא ריק, רק במובייל */
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
         }
 
         body {
@@ -354,7 +359,6 @@
         /* לוח שנה חודשי */
         .calendar-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
             background: #0f172a;
             padding: 12px 16px;
@@ -362,9 +366,19 @@
             margin-bottom: 12px;
         }
 
+        /* שני הכפתורים מקבלים בדיוק אותו רוחב (flex:1 עם flex-basis 0), כדי
+           שהכותרת באמצע תתמרכז אמיתית סביב מרכז הכרטיס - לא רק "הרווח שנשאר"
+           בין שני כפתורים שעלולים להיות ברוחב מעט שונה. בלי זה זה נראה תקין
+           ברוב המקרים אך זז קלות במובייל, כשההבדל הקטן ברוחב הכפתורים בולט יותר */
+        .calendar-header > button {
+            flex: 1 1 0;
+        }
+
         .calendar-header h3 {
+            flex: 1.4 1 0;
             font-size: 1.2rem;
             color: var(--primary);
+            text-align: center;
         }
 
         .calendar-grid {
@@ -3283,6 +3297,8 @@
 
             const firstDayIndex = new Date(year, month, 1).getDay();
             const totalDays = new Date(year, month + 1, 0).getDate();
+            const todayKey = formatDateKey(new Date());
+            let todayCellData = null;
 
             for (let i = 0; i < firstDayIndex; i++) {
                 const emptyCell = document.createElement('div');
@@ -3316,10 +3332,22 @@
                     showGlobalDayDetails(dateKey, teamsWithPractice);
                 };
                 grid.appendChild(cell);
+
+                if (dateKey === todayKey) {
+                    todayCellData = { cell, dateKey, teamsWithPractice };
+                }
             }
 
-            const detailsEl = document.getElementById('global-cal-day-details');
-            if (detailsEl) detailsEl.innerHTML = '';
+            // אם עדיין לא נבחר אף תאריך באופן ידני בסשן הזה, ויש אימון היום -
+            // מציגים את פרטי היום אוטומטית, בדיוק כאילו לחצנו עליו
+            if (selectedGlobalDateKey === null && todayCellData && todayCellData.teamsWithPractice.length > 0) {
+                selectedGlobalDateKey = todayCellData.dateKey;
+                todayCellData.cell.classList.add('is-selected');
+                showGlobalDayDetails(todayCellData.dateKey, todayCellData.teamsWithPractice);
+            } else {
+                const detailsEl = document.getElementById('global-cal-day-details');
+                if (detailsEl) detailsEl.innerHTML = '';
+            }
         }
 
         function renderGlobalCalendarWeek() {
@@ -4883,6 +4911,32 @@
                 });
             }
         }
+
+        // ============================================================
+        // טיפול בכפתור "אחורה" של הטלפון / מחוות חזרה בדפדפן ובאפליקציית PWA
+        // ============================================================
+        // בלי זה, לחיצה על "אחורה" של הטלפון (לא כפתור "→ חזרה" שבתוך האפליקציה)
+        // הייתה יוצאת ישר מכל האפליקציה - כי לאפליקציית SPA כזו אין history
+        // אמיתי בדפדפן שמייצג את המסכים הפנימיים שלנו. הפתרון: שומרים תמיד
+        // רשומת history "חוצצת" אחת נוספת, ומיירטים כל לחיצה על "אחורה" (אירוע
+        // popstate) - אם יש עוד מסך פנימי לחזור אליו, מנווטים אליו במקום לצאת;
+        // ורק אם הגענו למסך שורש (בלי עוד להיכן לחזור), שואלים אישור לפני יציאה
+        // אמיתית מהאפליקציה.
+        function pushHistoryTrap() {
+            history.pushState({ coachoopTrap: true }, '');
+        }
+        pushHistoryTrap();
+
+        window.addEventListener('popstate', function () {
+            if (viewHistory.length > 0) {
+                pushHistoryTrap();
+                goBack();
+            } else if (confirm('לצאת מהאפליקציה?')) {
+                history.back();
+            } else {
+                pushHistoryTrap();
+            }
+        });
 
         window.addEventListener('load', initInstallBanner);
     </script>
