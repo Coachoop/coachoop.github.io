@@ -639,6 +639,22 @@
             margin-bottom: 10px;
         }
 
+        .exercise-drag-handle {
+            cursor: grab;
+            touch-action: none;
+            user-select: none;
+            font-size: 1.4rem;
+            line-height: 1;
+            color: var(--text-muted);
+            padding: 6px 4px;
+            flex-shrink: 0;
+        }
+
+        .exercise-drag-item.dragging {
+            opacity: 0.6;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+        }
+
         .note-header {
             display: flex;
             justify-content: space-between;
@@ -1086,7 +1102,8 @@
             </div>
 
             <div class="card" style="margin-top:15px;">
-                <h3 style="color:var(--primary); margin-bottom:10px;">🎨 תרגילים באימון זה</h3>
+                <h3 style="color:var(--primary); margin-bottom:4px;">🎨 תרגילים באימון זה</h3>
+                <p style="color:var(--text-muted); font-size:0.75rem; margin-bottom:10px;">גרור מהידית ⠿ כדי לשנות את סדר התרגילים</p>
                 <div id="practice-exercises-list"></div>
                 <button class="btn" style="width:100%; margin-top:10px;" onclick="addNewExercise()">➕ הוסף תרגיל חדש</button>
             </div>
@@ -3837,8 +3854,9 @@
             }
 
             container.innerHTML = practice.exercises.map((ex, index) => `
-                <div class="note-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div class="note-card exercise-drag-item" data-exercise-id="${ex.id}" style="display:flex; align-items:center; gap:6px;">
+                    <div class="exercise-drag-handle" title="גרור לשינוי סדר">⠿</div>
+                    <div style="flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:8px;">
                         <div>
                             <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${ex.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט עדיין'}</p>
@@ -3851,6 +3869,78 @@
                     </div>
                 </div>
             `).join('');
+
+            initExerciseDragReorder(container);
+        }
+
+        // ============================================================
+        // גרירה לשינוי סדר תרגילים באימון - Pointer Events, עובד גם בעכבר
+        // וגם במגע (טלפון) באותו קוד, בלי צורך בספריות חיצוניות
+        // ============================================================
+        let exerciseDragState = null;
+
+        function initExerciseDragReorder(container) {
+            container.querySelectorAll('.exercise-drag-handle').forEach(handle => {
+                handle.onpointerdown = (e) => startExerciseDrag(e, handle.closest('.exercise-drag-item'), container);
+            });
+        }
+
+        function startExerciseDrag(e, item, container) {
+            e.preventDefault();
+            exerciseDragState = { item, container };
+            item.classList.add('dragging');
+
+            document.addEventListener('pointermove', onExerciseDragMove);
+            document.addEventListener('pointerup', onExerciseDragEnd);
+        }
+
+        function getExerciseDragAfterElement(container, y) {
+            const items = Array.from(container.querySelectorAll('.exercise-drag-item:not(.dragging)'));
+            return items.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset, element: child };
+                }
+                return closest;
+            }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+        }
+
+        function onExerciseDragMove(e) {
+            if (!exerciseDragState) return;
+            const { item, container } = exerciseDragState;
+            const afterElement = getExerciseDragAfterElement(container, e.clientY);
+            if (afterElement == null) {
+                container.appendChild(item);
+            } else {
+                container.insertBefore(item, afterElement);
+            }
+        }
+
+        function onExerciseDragEnd() {
+            if (!exerciseDragState) return;
+            const { item, container } = exerciseDragState;
+            item.classList.remove('dragging');
+
+            document.removeEventListener('pointermove', onExerciseDragMove);
+            document.removeEventListener('pointerup', onExerciseDragEnd);
+
+            // קוראים את הסדר החדש מה-DOM, מעדכנים את המערך בפועל, ושומרים
+            const newOrderIds = Array.from(container.querySelectorAll('.exercise-drag-item')).map(el => el.dataset.exerciseId);
+
+            const team = getCurrentTeam();
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            if (practice) {
+                const reordered = newOrderIds.map(id => practice.exercises.find(ex => ex.id === id)).filter(Boolean);
+                practice.exercises = reordered;
+                saveState();
+                logAppEvent('reorder_exercises', { team_id: team.id || null });
+            }
+
+            exerciseDragState = null;
+            renderExercisesList();
         }
 
         function addNewExercise() {
