@@ -2249,6 +2249,10 @@
                 viewHistory = [];
             } else if (!isNavigatingBack && currentViewId && currentViewId !== viewId) {
                 viewHistory.push(currentViewId);
+                // רשומת history אמיתית לכל צעד קדימה פנימי - כדי שכפתור/מחוות
+                // "אחורה" של הטלפון תתקדם אחורה בדיוק שלב-אחרי-שלב, בסנכרון מלא
+                // עם viewHistory שלנו (ולא "תקפוץ" ישר לשורש)
+                pushHistoryTrap();
             }
             isNavigatingBack = false;
 
@@ -2899,7 +2903,6 @@
 
                 const practicesList = getEffectivePracticesForDate(currentTeam, dateKey);
                 const count = practicesList.length;
-                const timesText = practicesList.filter(p => p.time).map(p => formatTimeRange(p)).join(', ');
                 const holiday = getHolidayInfo(currentTeam, dateKey);
                 const isToday = dateKey === todayKey;
 
@@ -2915,8 +2918,7 @@
                 cell.innerHTML = `
                     <span class="cal-day-num"><strong>${day}</strong></span>
                     ${holiday ? `<span style="font-size:0.6rem; color:var(--text-muted); display:block;">🎌 ${holiday.name}</span>` : ''}
-                    ${count > 0 ? `<span class="practice-badge" style="background:${teamColor};">${count} אימונים</span>` : ''}
-                    ${timesText ? `<span style="font-size:0.65rem; color:var(--text-muted); display:block;">${timesText}</span>` : ''}
+                    ${count > 0 ? `<div style="display:flex; gap:3px; justify-content:center; flex-wrap:wrap; margin-top:3px;">${Array.from({ length: count }).map(() => `<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${teamColor};"></span>`).join('')}</div>` : ''}
                 `;
 
                 cell.onclick = () => openDayPractices(dateKey);
@@ -4931,13 +4933,13 @@
         // ============================================================
         // טיפול בכפתור "אחורה" של הטלפון / מחוות חזרה בדפדפן ובאפליקציית PWA
         // ============================================================
-        // בלי זה, לחיצה על "אחורה" של הטלפון (לא כפתור "→ חזרה" שבתוך האפליקציה)
-        // הייתה יוצאת ישר מכל האפליקציה - כי לאפליקציית SPA כזו אין history
-        // אמיתי בדפדפן שמייצג את המסכים הפנימיים שלנו. הפתרון: שומרים תמיד
-        // רשומת history "חוצצת" אחת נוספת, ומיירטים כל לחיצה על "אחורה" (אירוע
-        // popstate) - אם יש עוד מסך פנימי לחזור אליו, מנווטים אליו במקום לצאת;
-        // ורק אם הגענו למסך שורש (בלי עוד להיכן לחזור), שואלים אישור לפני יציאה
-        // אמיתית מהאפליקציה.
+        // כל צעד ניווט קדימה בתוך האפליקציה (ב-showView) דוחף רשומת history
+        // אמיתית משלו, כך שהיא תואמת בדיוק, שלב-אחרי-שלב, למחסנית viewHistory
+        // הפנימית שלנו. כשלוחצים "אחורה" בטלפון, הדפדפן כבר זז אחורה רשומה
+        // אחת בעצמו לפני שהאירוע (popstate) בכלל מגיע אלינו - לכן כאן רק
+        // מסנכרנים את התצוגה (מוציאים שלב אחד מ-viewHistory ומציגים אותו),
+        // בלי לדחוף עוד רשומה. רק כשאין יותר מסכים פנימיים לחזור אליהם (הגענו
+        // לשורש) שואלים אישור לפני יציאה אמיתית מהאפליקציה.
         function pushHistoryTrap() {
             history.pushState({ coachoopTrap: true }, '');
         }
@@ -4945,7 +4947,6 @@
 
         window.addEventListener('popstate', function () {
             if (viewHistory.length > 0) {
-                pushHistoryTrap();
                 goBack();
             } else if (confirm('לצאת מהאפליקציה?')) {
                 history.back();
