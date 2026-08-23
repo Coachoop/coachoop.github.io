@@ -112,6 +112,11 @@
 
         .hamburger-menu-wrap {
             position: relative;
+            /* מעגן את ההמבורגר תמיד בקצה השמאלי האמיתי, גם כשהתגים למעלה
+               (אימייל/מנהל/קבוצה) נשברים לשורה משלהם ותופסים אותה לבד -
+               justify-content:space-between של ההורה לא עוזר במצב הזה כי
+               אין עם מי "לאזן" כשההמבורגר נשאר לבד בשורה שלו */
+            margin-left: auto;
         }
 
         .hamburger-menu-dropdown {
