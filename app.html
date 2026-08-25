@@ -721,6 +721,7 @@
                     <button onclick="showView('view-teams-list'); closeHamburgerMenu()">📋 רשימת קבוצות</button>
                     <button onclick="showView('view-account-settings'); closeHamburgerMenu()">⚙️ הגדרות</button>
                     <button onclick="openInviteModal(); closeHamburgerMenu()">📨 שלח אפליקציה למאמנ/ת</button>
+                    <button onclick="showView('view-drill-bank'); closeHamburgerMenu()">📚 בנק תרגילים</button>
                     <button onclick="openFeedbackModal(); closeHamburgerMenu()">💡 הצעות ומשוב / צור קשר</button>
                     <button id="admin-feedback-menu-item" style="display:none;" onclick="openAdminFeedbackFromBell(); closeHamburgerMenu()">
                         🔔 פניות שהתקבלו <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
@@ -852,6 +853,22 @@
                     <button class="btn" id="create-team-btn" style="width: 100%; margin-top: 8px;" onclick="createNewTeam()">צור קבוצה חדשה</button>
                 </div>
             </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- בנק תרגילים -->
+        <!-- ========================================== -->
+        <div id="view-drill-bank" class="view">
+            <h2>📚 בנק תרגילים</h2>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:12px;">תרגילים שמורים שאפשר לשלוף לכל אימון, בכל קבוצה - בלי לשרטט אותם מחדש בכל פעם.</p>
+
+            <div class="card" style="padding:10px; margin-bottom:15px;">
+                <input type="text" id="drill-bank-search" placeholder="🔍 חפש לפי שם או תגית..." oninput="renderDrillBankList()" style="margin-bottom:0;">
+            </div>
+
+            <button class="btn" style="width:100%; margin-bottom:15px;" onclick="createNewBankDrill()">➕ הוסף תרגיל חדש לבנק</button>
+
+            <div id="drill-bank-list"></div>
         </div>
 
         <!-- ========================================== -->
@@ -1105,7 +1122,10 @@
                 <h3 style="color:var(--primary); margin-bottom:4px;">🎨 תרגילים באימון זה</h3>
                 <p style="color:var(--text-muted); font-size:0.75rem; margin-bottom:10px;">גרור מהידית ⠿ כדי לשנות את סדר התרגילים</p>
                 <div id="practice-exercises-list"></div>
-                <button class="btn" style="width:100%; margin-top:10px;" onclick="addNewExercise()">➕ הוסף תרגיל חדש</button>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <button class="btn" style="flex:1;" onclick="addNewExercise()">➕ הוסף תרגיל חדש</button>
+                    <button class="btn btn-secondary" style="flex:1;" onclick="openBankPickerModal()">📚 מהבנק</button>
+                </div>
             </div>
 
             <div class="actions-row">
@@ -1128,6 +1148,10 @@
                 <div class="form-group">
                     <label>🎥 קישור וידאו להדגמה (YouTube / Facebook / Instagram):</label>
                     <input type="url" id="exercise-video-input" placeholder="הדבק כאן קישור לסרטון הדגמה">
+                </div>
+                <div class="form-group" id="bank-drill-tags-group" style="display:none;">
+                    <label>🏷️ תגיות (מופרדות בפסיקים):</label>
+                    <input type="text" id="bank-drill-tags-input" placeholder="למשל: חימום, כדרור, U12">
                 </div>
                 <label>סוג מגרש:</label>
                 <div style="display: flex; gap: 10px; margin: 8px 0 0 0;">
@@ -1172,10 +1196,18 @@
                 </div>
             </div>
 
-            <div class="actions-row">
+            <div class="actions-row" id="court-actions-exercise">
                 <button class="btn btn-secondary" onclick="saveExerciseDataInPlace()">💾 שמור תרגיל</button>
                 <button class="btn" onclick="saveExerciseData()">שמור וחזור לאימון</button>
-                <button class="btn btn-secondary" onclick="showView('view-practice-edit')">חזרה לעריכת אימון</button>
+            </div>
+            <div class="actions-row" id="court-actions-exercise-2">
+                <button class="btn btn-secondary" style="flex:1;" onclick="saveCurrentExerciseToBank()">📚 שמור עותק לבנק</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="showView('view-practice-edit')">חזרה לעריכת אימון</button>
+            </div>
+
+            <div class="actions-row" id="court-actions-bank" style="display:none;">
+                <button class="btn" onclick="saveBankDrillData()">💾 שמור בבנק</button>
+                <button class="btn btn-secondary" onclick="showView('view-drill-bank')">ביטול</button>
             </div>
         </div>
 
@@ -1367,7 +1399,8 @@
         // --- מבנה נתונים ראשי (בזיכרון, מסונכרן עם Firestore) ---
         let appState = {
             teams: [],
-            currentTeamId: null
+            currentTeamId: null,
+            drillBank: []
         };
 
         let currentUser = null;
@@ -1427,7 +1460,8 @@
                     currentUser = null;
                     currentUserRole = 'coach';
                     if (unsubscribeTeamsListener) { unsubscribeTeamsListener(); unsubscribeTeamsListener = null; }
-                    appState = { teams: [], currentTeamId: null };
+                    if (unsubscribeDrillBankListener) { unsubscribeDrillBankListener(); unsubscribeDrillBankListener = null; }
+                    appState = { teams: [], currentTeamId: null, drillBank: [] };
                     document.getElementById('header-user-info').style.display = 'none';
                     showView('view-auth');
                 }
@@ -1948,6 +1982,7 @@
             }
 
             subscribeToTeams();
+            subscribeToDrillBank();
             subscribeToFeedbackNotifications();
             showView('view-teams-list');
         }
@@ -2223,6 +2258,23 @@
             });
         }
 
+        // --- בנק תרגילים: טעינה מ-Firestore בזמן אמת (משותף לכל הקבוצות של המאמן) ---
+        let unsubscribeDrillBankListener = null;
+
+        function subscribeToDrillBank() {
+            if (unsubscribeDrillBankListener) unsubscribeDrillBankListener();
+
+            unsubscribeDrillBankListener = db.collection('drillBank').where('ownerId', '==', currentUser.uid)
+                .onSnapshot((snapshot) => {
+                    appState.drillBank = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    if (document.getElementById('view-drill-bank').classList.contains('active')) {
+                        renderDrillBankList();
+                    }
+                }, (err) => {
+                    console.error('שגיאה בטעינת בנק תרגילים:', err);
+                });
+        }
+
         // --- מעבר בין 'רק שלי' ל'כל הקבוצות' (admin בלבד) ---
         function setAdminTeamsFilter(mode) {
             if (currentUserRole !== 'admin') return;
@@ -2282,6 +2334,7 @@
 
             if (viewId === 'view-players-list') renderPlayersList();
             if (viewId === 'view-notes-main') renderNotesList();
+            if (viewId === 'view-drill-bank') renderDrillBankList();
             if (viewId === 'view-teams-list') { renderTeamsList(); renderGlobalCalendar(); }
             if (viewId === 'view-calendar') renderCalendar();
             if (viewId === 'view-account-settings' || viewId === 'view-recurring') updateGoogleCalendarStatusUI();
@@ -3782,6 +3835,9 @@
         }
 
         let selectedExerciseId = null;
+        // מצב עורך השרטוט: 'exercise' = תרגיל בתוך אימון, 'bankDrill' = תרגיל בבנק
+        let editorMode = 'exercise';
+        let selectedBankDrillId = null;
 
         function migratePracticeToExercises(practice) {
             // תאימות לאחור: אימון ישן עם שרטוט בודד ברמת האימון -> הופך לתרגיל ראשון ברשימה
@@ -3982,6 +4038,176 @@
             renderExercisesList();
         }
 
+        // ============================================================
+        // בנק תרגילים - משאב חוצה-קבוצות, שייך למאמן (לא לקבוצה ספציפית).
+        // תרגיל שנבחר מהבנק *מועתק* לתוך אימון (לא מקושר) - כדי שעריכה עתידית
+        // בבנק לא תשנה בדיעבד אימונים שכבר השתמשו בו.
+        // ============================================================
+        function renderDrillBankList() {
+            const container = document.getElementById('drill-bank-list');
+            if (!container) return;
+
+            const searchInput = document.getElementById('drill-bank-search');
+            const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
+            let drills = appState.drillBank || [];
+            if (query) {
+                drills = drills.filter(d =>
+                    (d.title || '').toLowerCase().includes(query) ||
+                    (d.tags || []).some(t => t.toLowerCase().includes(query))
+                );
+            }
+
+            if (drills.length === 0) {
+                container.innerHTML = `<div class="card"><p style="color:var(--text-muted);">${query ? 'לא נמצאו תרגילים תואמים.' : 'אין עדיין תרגילים בבנק. הוסף את הראשון!'}</p></div>`;
+                return;
+            }
+
+            container.innerHTML = drills.map(d => `
+                <div class="note-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                        <div style="min-width:0;">
+                            <strong>${d.title || 'תרגיל ללא שם'}</strong>
+                            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${d.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט'}</p>
+                            ${(d.tags && d.tags.length) ? `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">${d.tags.map(t => `<span style="background:#0f172a; border:1px solid var(--border-color); border-radius:10px; padding:2px 8px; font-size:0.7rem; color:var(--text-muted);">#${t}</span>`).join('')}</div>` : ''}
+                            ${getVideoLinkBadge(d.videoUrl)}
+                        </div>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                            <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openBankDrillEditor('${d.id}')">✏️ ערוך</button>
+                            <button class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="deleteBankDrill('${d.id}')">🗑️</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function createNewBankDrill() {
+            const newDrill = {
+                ownerId: currentUser.uid,
+                title: 'תרגיל חדש',
+                tags: [],
+                type: 'half',
+                canvasImg: null,
+                videoUrl: '',
+                notes: '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            try {
+                const docRef = await db.collection('drillBank').add(newDrill);
+                logAppEvent('create_bank_drill');
+                openBankDrillEditor(docRef.id);
+            } catch (e) {
+                console.error('שגיאה ביצירת תרגיל בבנק:', e);
+                alert('שגיאה ביצירת התרגיל. נסה שוב.');
+            }
+        }
+
+        async function deleteBankDrill(drillId) {
+            if (!confirm('למחוק את התרגיל הזה מהבנק? השרטוט שלו יימחק לצמיתות. אימונים שכבר השתמשו בעותק שלו לא יושפעו.')) return;
+            try {
+                await db.collection('drillBank').doc(drillId).delete();
+            } catch (e) {
+                console.error('שגיאה במחיקת תרגיל מהבנק:', e);
+                alert('שגיאה במחיקה. נסה שוב.');
+            }
+        }
+
+        async function saveBankDrillData() {
+            if (!selectedBankDrillId) return;
+
+            const drill = appState.drillBank.find(d => d.id === selectedBankDrillId);
+            const title = document.getElementById('exercise-title-input').value.trim() || 'תרגיל ללא שם';
+            const videoUrl = document.getElementById('exercise-video-input').value.trim();
+            const notes = document.getElementById('court-synced-notes').value;
+            const tagsRaw = document.getElementById('bank-drill-tags-input').value;
+            const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+
+            let canvasImg = null;
+            if (canvasExplicitlyCleared) {
+                canvasImg = null;
+            } else if (canvas && (hasDrawnOnCanvas || (drill && drill.canvasImg))) {
+                canvasImg = canvas.toDataURL();
+            }
+
+            try {
+                await db.collection('drillBank').doc(selectedBankDrillId).update({
+                    title, videoUrl, notes, tags, type: currentCourtType, canvasImg
+                });
+                showFeedbackToast('💾 התרגיל נשמר בבנק');
+                showView('view-drill-bank');
+            } catch (e) {
+                console.error('שגיאה בשמירת תרגיל לבנק:', e);
+                alert('שגיאה בשמירה. נסה שוב.');
+            }
+        }
+
+        // מעתיק (לא מקשר!) תרגיל מהבנק לתוך האימון הפתוח כרגע - עותק עצמאי
+        // לגמרי, כדי שעדכון עתידי בבנק לא ישנה בדיעבד אימונים שכבר נבנו
+        function addExerciseFromBank(bankDrillId) {
+            const team = getCurrentTeam();
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            const bankDrill = appState.drillBank.find(d => d.id === bankDrillId);
+            if (!practice || !bankDrill) return;
+
+            migratePracticeToExercises(practice);
+
+            const newExercise = {
+                id: 'ex_' + Date.now(),
+                title: bankDrill.title || `תרגיל ${practice.exercises.length + 1}`,
+                type: bankDrill.type || 'half',
+                canvasImg: bankDrill.canvasImg || null,
+                videoUrl: bankDrill.videoUrl || '',
+                notes: bankDrill.notes || ''
+            };
+            practice.exercises.push(newExercise);
+            logAppEvent('add_exercise_from_bank', { team_id: team.id || null });
+            saveState();
+            renderExercisesList();
+            closeBankPickerModal();
+        }
+
+        function openBankPickerModal() {
+            const modal = document.getElementById('bank-picker-modal');
+            if (!modal) return;
+            document.getElementById('bank-picker-search').value = '';
+            renderBankPickerList();
+            modal.style.display = 'flex';
+        }
+
+        function closeBankPickerModal() {
+            const modal = document.getElementById('bank-picker-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function renderBankPickerList() {
+            const container = document.getElementById('bank-picker-list');
+            if (!container) return;
+
+            const query = document.getElementById('bank-picker-search').value.trim().toLowerCase();
+            let drills = appState.drillBank || [];
+            if (query) {
+                drills = drills.filter(d =>
+                    (d.title || '').toLowerCase().includes(query) ||
+                    (d.tags || []).some(t => t.toLowerCase().includes(query))
+                );
+            }
+
+            if (drills.length === 0) {
+                container.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:12px;">${(appState.drillBank || []).length === 0 ? 'הבנק שלך ריק עדיין - הוסף תרגילים דרך תפריט ☰ → בנק תרגילים.' : 'לא נמצאו תרגילים תואמים.'}</p>`;
+                return;
+            }
+
+            container.innerHTML = drills.map(d => `
+                <div class="note-card" style="cursor:pointer;" onclick="addExerciseFromBank('${d.id}')">
+                    <strong>${d.title || 'תרגיל ללא שם'}</strong>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${d.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט'}</p>
+                    ${(d.tags && d.tags.length) ? `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;">${d.tags.map(t => `<span style="background:#0f172a; border:1px solid var(--border-color); border-radius:10px; padding:2px 8px; font-size:0.7rem; color:var(--text-muted);">#${t}</span>`).join('')}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
         // מגדילה textarea אוטומטית לגובה שמתאים בדיוק לתוכן שלה, כדי שלעולם לא תהיה
         // גלילה פנימית בתוך התיבה עצמה - כל מה שכתוב תמיד גלוי במלואו
         function autoGrowTextarea(el) {
@@ -4074,9 +4300,21 @@
             openExerciseEditor(exerciseId);
         }
 
+        // עובר בין מצב עריכת "תרגיל בתוך אימון" לבין "תרגיל בבנק" - מציג/מסתיר
+        // את שדה התגיות ואת שורת הכפתורים המתאימה למצב
+        function setCourtEditorMode(mode) {
+            editorMode = mode;
+            document.getElementById('bank-drill-tags-group').style.display = mode === 'bankDrill' ? 'block' : 'none';
+            document.getElementById('court-actions-exercise').style.display = mode === 'exercise' ? 'flex' : 'none';
+            document.getElementById('court-actions-exercise-2').style.display = mode === 'exercise' ? 'flex' : 'none';
+            document.getElementById('court-actions-bank').style.display = mode === 'bankDrill' ? 'flex' : 'none';
+        }
+
         function openExerciseEditor(exerciseId) {
             selectedExerciseId = exerciseId;
+            selectedBankDrillId = null;
             showView('view-court');
+            setCourtEditorMode('exercise');
 
             // איפוס מיידי וללא-תנאי של הטופס - לפני כל חיפוש נתונים - כדי שלעולם
             // לא יישאר על המסך טקסט/מצב שריד מעריכת תרגיל קודם, גם אם משהו למטה נכשל
@@ -4128,6 +4366,85 @@
         function revealCanvasSection() {
             document.getElementById('canvas-section').style.display = 'flex';
             document.getElementById('canvas-add-prompt').style.display = 'none';
+        }
+
+        function openBankDrillEditor(drillId) {
+            selectedBankDrillId = drillId;
+            selectedExerciseId = null;
+            showView('view-court');
+            setCourtEditorMode('bankDrill');
+
+            document.getElementById('exercise-title-input').value = '';
+            document.getElementById('exercise-video-input').value = '';
+            document.getElementById('court-synced-notes').value = '';
+            document.getElementById('court-synced-notes').style.height = 'auto';
+            document.getElementById('bank-drill-tags-input').value = '';
+            hasDrawnOnCanvas = false;
+            canvasExplicitlyCleared = false;
+
+            const drill = appState.drillBank.find(d => d.id === drillId);
+            if (!drill) return;
+
+            document.getElementById('court-title').innerText = 'שרטוט - בנק תרגילים';
+            document.getElementById('exercise-title-input').value = drill.title || '';
+            document.getElementById('exercise-video-input').value = drill.videoUrl || '';
+            document.getElementById('court-synced-notes').value = drill.notes || '';
+            autoGrowTextarea(document.getElementById('court-synced-notes'));
+            document.getElementById('bank-drill-tags-input').value = (drill.tags || []).join(', ');
+            setExerciseCourtType(drill.type || 'half');
+
+            drawCourtBackground();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (drill.canvasImg) {
+                const img = new Image();
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0);
+                };
+                img.src = drill.canvasImg;
+                document.getElementById('canvas-section').style.display = 'flex';
+                document.getElementById('canvas-add-prompt').style.display = 'none';
+            } else {
+                document.getElementById('canvas-section').style.display = 'none';
+                document.getElementById('canvas-add-prompt').style.display = 'block';
+            }
+        }
+
+        // שומר עותק עצמאי של התרגיל הפתוח כרגע (בתוך אימון) לבנק התרגילים -
+        // לא מזיז/לא מוחק אותו מהאימון, רק מוסיף עותק נוסף לבנק לשימוש עתידי
+        async function saveCurrentExerciseToBank() {
+            const team = getCurrentTeam();
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            const exercise = practice ? practice.exercises.find(e => e.id === selectedExerciseId) : null;
+
+            const title = document.getElementById('exercise-title-input').value.trim() || 'תרגיל ללא שם';
+            const videoUrl = document.getElementById('exercise-video-input').value.trim();
+            const notes = document.getElementById('court-synced-notes').value;
+
+            let canvasImg = null;
+            if (canvasExplicitlyCleared) {
+                canvasImg = null;
+            } else if (canvas && (hasDrawnOnCanvas || (exercise && exercise.canvasImg))) {
+                canvasImg = canvas.toDataURL();
+            }
+
+            try {
+                await db.collection('drillBank').add({
+                    ownerId: currentUser.uid,
+                    title, videoUrl, notes,
+                    tags: [],
+                    type: currentCourtType,
+                    canvasImg,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                logAppEvent('save_exercise_to_bank');
+                showFeedbackToast('📚 עותק נשמר בבנק התרגילים');
+            } catch (e) {
+                console.error('שגיאה בשמירה לבנק:', e);
+                alert('שגיאה בשמירה לבנק. נסה שוב.');
+            }
         }
 
         function saveExerciseData() {
@@ -5087,6 +5404,18 @@
             </div>
             <button class="btn btn-secondary" style="width:100%; margin-top:8px;" onclick="copyInviteLink()">📋 העתק קישור בלבד</button>
             <button class="btn btn-secondary" style="width:100%; margin-top:8px;" onclick="closeInviteModal()">סגור</button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- מודל בחירת תרגיל מבנק התרגילים -->
+    <!-- ========================================== -->
+    <div id="bank-picker-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:420px; width:100%; max-height:80vh; display:flex; flex-direction:column;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">📚 בחר תרגיל מהבנק</h3>
+            <input type="text" id="bank-picker-search" placeholder="🔍 חפש לפי שם או תגית..." oninput="renderBankPickerList()" style="margin-bottom:10px;">
+            <div id="bank-picker-list" style="overflow-y:auto; flex:1;"></div>
+            <button class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="closeBankPickerModal()">ביטול</button>
         </div>
     </div>
 
