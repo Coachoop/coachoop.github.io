@@ -866,6 +866,8 @@
                 <input type="text" id="drill-bank-search" placeholder="🔍 חפש לפי שם או תגית..." oninput="renderDrillBankList()" style="margin-bottom:0;">
             </div>
 
+            <div id="drill-bank-tag-filters" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:15px;"></div>
+
             <button class="btn" style="width:100%; margin-bottom:15px;" onclick="createNewBankDrill()">➕ הוסף תרגיל חדש לבנק</button>
 
             <div id="drill-bank-list"></div>
@@ -4043,23 +4045,54 @@
         // תרגיל שנבחר מהבנק *מועתק* לתוך אימון (לא מקושר) - כדי שעריכה עתידית
         // בבנק לא תשנה בדיעבד אימונים שכבר השתמשו בו.
         // ============================================================
+        // תגיות שנבחרו כרגע לסינון בבנק התרגילים (אפשר לבחור כמה, לוגיקת OR -
+        // מציג תרגיל אם יש לו לפחות אחת מהתגיות שנבחרו)
+        let selectedBankTagFilters = new Set();
+
+        function toggleBankTagFilter(tag) {
+            if (selectedBankTagFilters.has(tag)) {
+                selectedBankTagFilters.delete(tag);
+            } else {
+                selectedBankTagFilters.add(tag);
+            }
+            renderDrillBankList();
+        }
+
         function renderDrillBankList() {
             const container = document.getElementById('drill-bank-list');
+            const tagFiltersContainer = document.getElementById('drill-bank-tag-filters');
             if (!container) return;
 
             const searchInput = document.getElementById('drill-bank-search');
             const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
 
-            let drills = appState.drillBank || [];
+            const allDrills = appState.drillBank || [];
+
+            // בונים את רשימת כל התגיות הקיימות בבנק, כדי להציג אותן כצ'יפים לבחירה
+            const allTags = Array.from(new Set(allDrills.flatMap(d => d.tags || []))).sort();
+            if (tagFiltersContainer) {
+                if (allTags.length === 0) {
+                    tagFiltersContainer.innerHTML = '';
+                } else {
+                    tagFiltersContainer.innerHTML = allTags.map(tag => `
+                        <button type="button" class="court-type-btn ${selectedBankTagFilters.has(tag) ? 'selected' : ''}" style="flex:0 0 auto; padding:6px 12px; font-size:0.8rem;" onclick="toggleBankTagFilter('${tag.replace(/'/g, "\\'")}')">#${tag}</button>
+                    `).join('');
+                }
+            }
+
+            let drills = allDrills;
             if (query) {
                 drills = drills.filter(d =>
                     (d.title || '').toLowerCase().includes(query) ||
                     (d.tags || []).some(t => t.toLowerCase().includes(query))
                 );
             }
+            if (selectedBankTagFilters.size > 0) {
+                drills = drills.filter(d => (d.tags || []).some(t => selectedBankTagFilters.has(t)));
+            }
 
             if (drills.length === 0) {
-                container.innerHTML = `<div class="card"><p style="color:var(--text-muted);">${query ? 'לא נמצאו תרגילים תואמים.' : 'אין עדיין תרגילים בבנק. הוסף את הראשון!'}</p></div>`;
+                container.innerHTML = `<div class="card"><p style="color:var(--text-muted);">${(query || selectedBankTagFilters.size > 0) ? 'לא נמצאו תרגילים תואמים.' : 'אין עדיין תרגילים בבנק. הוסף את הראשון!'}</p></div>`;
                 return;
             }
 
