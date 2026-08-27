@@ -1203,7 +1203,7 @@
                 <button class="btn" onclick="saveExerciseData()">שמור וחזור לאימון</button>
             </div>
             <div class="actions-row" id="court-actions-exercise-2">
-                <button class="btn btn-secondary" style="flex:1;" onclick="saveCurrentExerciseToBank()">📚 שמור עותק לבנק</button>
+                <button class="btn btn-secondary" id="save-to-bank-btn" style="flex:1;" onclick="saveCurrentExerciseToBank()">📚 שמור עותק לבנק</button>
                 <button class="btn btn-secondary" style="flex:1;" onclick="showView('view-practice-edit')">חזרה לעריכת אימון</button>
             </div>
 
@@ -3681,7 +3681,7 @@
                                 <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
                                     ${practice.exercises.map(ex => `
                                         <span onclick="event.stopPropagation(); openExerciseFromDayList('${practice.id}', '${ex.id}')" style="cursor:pointer; background:#0f172a; border:1px solid var(--border-color); border-radius:6px; padding:4px 10px; font-size:0.8rem; color:var(--info);">
-                                            ${ex.canvasImg ? '🎨 ' : ''}${ex.title || 'תרגיל'}${ex.videoUrl ? ' 🎥' : ''}
+                                            ${ex.canvasImg ? '🎨 ' : ''}${ex.title || 'תרגיל'}${ex.videoUrl ? ' 🎥' : ''}${ex.sourceBankDrillId ? (isExerciseEditedFromBankSource(ex) ? ' 📚✏️' : ' 📚') : ''}
                                         </span>
                                     `).join('')}
                                 </div>
@@ -3894,6 +3894,26 @@
             return `<a href="${safeUrl}" target="_blank" rel="noopener" class="btn btn-info" style="display:inline-block; padding:6px 10px; font-size:0.8rem; text-decoration:none; margin-top:4px;">${label}</a>`;
         }
 
+        // ============================================================
+        // עזר לזיהוי תרגיל שהגיע מבנק התרגילים, ואם נערך מאז שנלקח
+        // ============================================================
+        function isExerciseEditedFromBankSource(ex) {
+            if (!ex.sourceBankDrillId || !ex.sourceSnapshot) return false;
+            const s = ex.sourceSnapshot;
+            return (ex.title || '') !== (s.title || '') ||
+                   (ex.videoUrl || '') !== (s.videoUrl || '') ||
+                   (ex.notes || '') !== (s.notes || '') ||
+                   (ex.type || 'half') !== (s.type || 'half') ||
+                   (ex.canvasImg || null) !== (s.canvasImg || null);
+        }
+
+        function getBankSourceBadge(ex) {
+            if (!ex || !ex.sourceBankDrillId) return '';
+            return isExerciseEditedFromBankSource(ex)
+                ? `<span title="הגיע מבנק התרגילים ונערך מאז" style="margin-inline-start:4px;">📚✏️</span>`
+                : `<span title="הגיע מבנק התרגילים" style="margin-inline-start:4px;">📚</span>`;
+        }
+
         function renderExercisesList() {
             const container = document.getElementById('practice-exercises-list');
             if (!container) return;
@@ -3916,7 +3936,7 @@
                     <div class="exercise-drag-handle" title="גרור לשינוי סדר">⠿</div>
                     <div style="flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:8px;">
                         <div>
-                            <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>
+                            <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>${getBankSourceBadge(ex)}
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${ex.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט עדיין'}</p>
                             ${getVideoLinkBadge(ex.videoUrl)}
                         </div>
@@ -4192,7 +4212,18 @@
                 type: bankDrill.type || 'half',
                 canvasImg: bankDrill.canvasImg || null,
                 videoUrl: bankDrill.videoUrl || '',
-                notes: bankDrill.notes || ''
+                notes: bankDrill.notes || '',
+                // מסמנים שהתרגיל הגיע מהבנק, ושומרים "תמונת מצב" של המצב המקורי -
+                // כדי שנוכל לזהות בהמשך אם נערך מאז שנלקח (ולא כדי "לעקוב" אחרי
+                // שינויים עתידיים בבנק עצמו - זה עותק עצמאי לגמרי מרגע ההעתקה)
+                sourceBankDrillId: bankDrillId,
+                sourceSnapshot: {
+                    title: bankDrill.title || '',
+                    canvasImg: bankDrill.canvasImg || null,
+                    videoUrl: bankDrill.videoUrl || '',
+                    notes: bankDrill.notes || '',
+                    type: bankDrill.type || 'half'
+                }
             };
             practice.exercises.push(newExercise);
             logAppEvent('add_exercise_from_bank', { team_id: team.id || null });
@@ -4375,6 +4406,11 @@
             autoGrowTextarea(document.getElementById('court-synced-notes'));
             setExerciseCourtType(exercise.type || 'half');
 
+            // תרגיל שהגיע מהבנק לא ניתן לשמור כעותק חדש בבנק - כדי לא ליצור
+            // כפילויות מיותרות של אותו תרגיל בדיוק
+            const saveToBankBtn = document.getElementById('save-to-bank-btn');
+            if (saveToBankBtn) saveToBankBtn.style.display = exercise.sourceBankDrillId ? 'none' : 'inline-flex';
+
             drawCourtBackground();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -4451,6 +4487,9 @@
             if (!Array.isArray(list)) list = [list];
             const practice = list.find(p => p.id === selectedPracticeId);
             const exercise = practice ? practice.exercises.find(e => e.id === selectedExerciseId) : null;
+
+            // הגנה נוספת (בנוסף להסתרת הכפתור) - תרגיל שהגיע מהבנק לא נשמר שוב אליו
+            if (exercise && exercise.sourceBankDrillId) return;
 
             const title = document.getElementById('exercise-title-input').value.trim() || 'תרגיל ללא שם';
             const videoUrl = document.getElementById('exercise-video-input').value.trim();
