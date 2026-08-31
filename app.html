@@ -894,6 +894,16 @@
                 <button class="btn btn-secondary" style="margin-top:10px; font-size:0.8rem; padding:6px 12px;" onclick="disconnectGoogleCalendarAutoConnect()">בטל התחברות אוטומטית</button>
             </div>
 
+            <div class="card" style="margin-bottom:15px; padding:14px;">
+                <strong>🔔 תזכורות הכנה לאימון</strong>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px; margin-bottom:10px;">
+                    אירוע נפרד וקליל ביומן Google (בצבע עדין), לפני כל אימון - בנוסף לאימון עצמו. אפשר להוסיף כמה תזכורות באורכים שונים. כבוי כברירת מחדל.
+                </p>
+                <div id="prep-reminders-list"></div>
+                <button class="btn btn-secondary" style="width:100%; margin-top:8px; font-size:0.85rem;" onclick="addPrepReminderRow()">➕ הוסף תזכורת נוספת</button>
+                <button class="btn" style="width:100%; margin-top:10px;" onclick="savePrepReminders()">💾 שמור תזכורות</button>
+            </div>
+
             <div id="admin-feedback-card" class="card" style="margin-bottom:15px; padding:14px; display:none;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
                     <strong>💡 הצעות ומשוב שהתקבלו</strong>
@@ -1407,6 +1417,9 @@
 
         let currentUser = null;
         let currentUserRole = 'coach';
+        // תזכורות "הכן אימון" שהמאמן הגדיר לעצמו - מערך של מספרי דקות-לפני-האימון.
+        // כבוי כברירת מחדל (מערך ריק) - כל מאמן מפעיל בעצמו אם רוצה
+        let currentUserPrepReminders = [];
         let unsubscribeTeamsListener = null;
         // עבור admin בלבד: 'mine' = רק הקבוצות שלי, 'all' = כל הקבוצות במערכת. ברירת מחדל: mine.
         let adminTeamsFilter = 'mine';
@@ -1783,6 +1796,197 @@
         }
 
         // --- סנכרון אימון חד-פעמי ---
+        // ============================================================
+        // תזכורות "הכן אימון" - אירוע נפרד וקליל ביומן Google, לפני האימון
+        // עצמו, לפי הגדרה אישית של כל מאמן (כבוי כברירת מחדל)
+        // ============================================================
+        const PREP_REMINDER_DURATION_MINUTES = 15;
+        // Graphite - גוון אפרפר עדין, כדי שיהיה ברור מיד שזו רק תזכורת ולא אימון עצמו
+        const PREP_REMINDER_COLOR_ID = '8';
+
+        function formatLocalDateTime(date) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        async function syncPrepRemindersForPractice(practice, dateKey) {
+            // בלי אירוע ראשי מסונכרן, אין למה "להצמיד" תזכורות הכנה
+            if (!practice.googleEventId || !practice.time) return;
+            if (!(await ensureGoogleCalendarConnected())) return;
+
+            if (!practice.prepEventIds) practice.prepEventIds = {};
+
+            const wantedOffsets = (currentUserPrepReminders || []).map(String);
+            const existingOffsets = Object.keys(practice.prepEventIds);
+
+            // מוחקים תזכורות שכבר לא רלוונטיות (המאמן הסיר אותן מההגדרות שלו)
+            for (const offset of existingOffsets) {
+                if (!wantedOffsets.includes(offset)) {
+                    const eventId = practice.prepEventIds[offset];
+                    if (eventId) {
+                        try { await googleCalendarRequest('DELETE', `events/${eventId}`); } catch (e) { /* ignore */ }
+                    }
+                    delete practice.prepEventIds[offset];
+                }
+            }
+
+            // יוצרים/מעדכנים את התזכורות הרצויות
+            for (const offsetStr of wantedOffsets) {
+                const offsetMinutes = Number(offsetStr);
+                if (!offsetMinutes || offsetMinutes <= 0) continue;
+
+                const practiceStart = new Date(`${dateKey}T${practice.time}:00`);
+                const prepStart = new Date(practiceStart.getTime() - offsetMinutes * 60000);
+                const prepEnd = new Date(prepStart.getTime() + PREP_REMINDER_DURATION_MINUTES * 60000);
+
+                const prepEventBody = {
+                    summary: `🔔 להכין אימון: ${practice.title || 'אימון'}`,
+                    colorId: PREP_REMINDER_COLOR_ID,
+                    start: { dateTime: formatLocalDateTime(prepStart), timeZone: APP_TIME_ZONE },
+                    end: { dateTime: formatLocalDateTime(prepEnd), timeZone: APP_TIME_ZONE }
+                };
+
+                try {
+                    const existingId = practice.prepEventIds[offsetStr];
+                    if (existingId) {
+                        const updated = await googleCalendarRequest('PATCH', `events/${existingId}`, prepEventBody);
+                        if (!updated) delete practice.prepEventIds[offsetStr];
+                    } else {
+                        const created = await googleCalendarRequest('POST', 'events', prepEventBody);
+                        if (created && created.id) practice.prepEventIds[offsetStr] = created.id;
+                    }
+                } catch (e) {
+                    console.warn('שגיאה בסנכרון תזכורת הכנה:', e);
+                }
+            }
+        }
+
+        async function deleteAllPrepRemindersForPractice(practice) {
+            if (!practice || !practice.prepEventIds) return;
+            if (!(await ensureGoogleCalendarConnected())) return;
+            for (const eventId of Object.values(practice.prepEventIds)) {
+                if (!eventId) continue;
+                try { await googleCalendarRequest('DELETE', `events/${eventId}`); } catch (e) { /* ignore */ }
+            }
+            practice.prepEventIds = {};
+        }
+
+        // ============================================================
+        // מסך הגדרות - ניהול תזכורות "הכן אימון" (UI)
+        // ============================================================
+        const PREP_REMINDER_PRESETS = [
+            { minutes: 30, label: '30 דקות לפני' },
+            { minutes: 60, label: 'שעה לפני' },
+            { minutes: 120, label: 'שעתיים לפני' },
+            { minutes: 180, label: '3 שעות לפני' },
+            { minutes: 360, label: '6 שעות לפני' },
+            { minutes: 1440, label: 'יום לפני' }
+        ];
+
+        function renderPrepRemindersSettings() {
+            const container = document.getElementById('prep-reminders-list');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (!currentUserPrepReminders || currentUserPrepReminders.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין עדיין תזכורות מוגדרות.</p>';
+                return;
+            }
+
+            currentUserPrepReminders.forEach(minutes => addPrepReminderRow(minutes));
+        }
+
+        function buildPrepReminderRowHtml(prefillMinutes) {
+            const presetMatch = PREP_REMINDER_PRESETS.find(p => p.minutes === prefillMinutes);
+            const isCustom = prefillMinutes != null && !presetMatch;
+
+            const optionsHtml = PREP_REMINDER_PRESETS.map(p =>
+                `<option value="${p.minutes}" ${presetMatch && presetMatch.minutes === p.minutes ? 'selected' : ''}>${p.label}</option>`
+            ).join('') + `<option value="custom" ${isCustom ? 'selected' : ''}>מותאם אישית...</option>`;
+
+            let customValue = '';
+            let customUnit = 'minutes';
+            if (isCustom) {
+                if (prefillMinutes % 60 === 0) {
+                    customValue = prefillMinutes / 60;
+                    customUnit = 'hours';
+                } else {
+                    customValue = prefillMinutes;
+                    customUnit = 'minutes';
+                }
+            }
+
+            return `
+                <div class="prep-reminder-row" style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+                    <select class="prep-reminder-preset" onchange="onPrepReminderPresetChange(this)" style="flex:1; min-width:140px;">
+                        ${optionsHtml}
+                    </select>
+                    <input type="number" min="1" class="prep-reminder-custom-value" placeholder="מספר" value="${customValue}" style="display:${isCustom ? 'inline-block' : 'none'}; width:70px;">
+                    <select class="prep-reminder-custom-unit" style="display:${isCustom ? 'inline-block' : 'none'}; width:90px;">
+                        <option value="minutes" ${customUnit === 'minutes' ? 'selected' : ''}>דקות</option>
+                        <option value="hours" ${customUnit === 'hours' ? 'selected' : ''}>שעות</option>
+                    </select>
+                    <button type="button" class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="this.closest('.prep-reminder-row').remove()">🗑️</button>
+                </div>
+            `;
+        }
+
+        function addPrepReminderRow(prefillMinutes) {
+            const container = document.getElementById('prep-reminders-list');
+            if (!container) return;
+            if (container.querySelector('p')) container.innerHTML = '';
+            container.insertAdjacentHTML('beforeend', buildPrepReminderRowHtml(prefillMinutes));
+        }
+
+        function onPrepReminderPresetChange(selectEl) {
+            const row = selectEl.closest('.prep-reminder-row');
+            const isCustom = selectEl.value === 'custom';
+            row.querySelector('.prep-reminder-custom-value').style.display = isCustom ? 'inline-block' : 'none';
+            row.querySelector('.prep-reminder-custom-unit').style.display = isCustom ? 'inline-block' : 'none';
+        }
+
+        function collectPrepReminderMinutesFromUI() {
+            const rows = document.querySelectorAll('#prep-reminders-list .prep-reminder-row');
+            const minutesList = [];
+
+            rows.forEach(row => {
+                const presetSelect = row.querySelector('.prep-reminder-preset');
+                if (presetSelect.value === 'custom') {
+                    const value = parseFloat(row.querySelector('.prep-reminder-custom-value').value);
+                    const unit = row.querySelector('.prep-reminder-custom-unit').value;
+                    if (value && value > 0) {
+                        minutesList.push(unit === 'hours' ? Math.round(value * 60) : Math.round(value));
+                    }
+                } else {
+                    minutesList.push(Number(presetSelect.value));
+                }
+            });
+
+            // מסירים כפילויות ומסדרים מהקצר לארוך
+            return Array.from(new Set(minutesList)).sort((a, b) => a - b);
+        }
+
+        async function savePrepReminders() {
+            const minutesList = collectPrepReminderMinutesFromUI();
+            currentUserPrepReminders = minutesList;
+            try {
+                await db.collection('users').doc(currentUser.uid).update({ prepReminders: minutesList });
+                logAppEvent('save_prep_reminders', { count: minutesList.length });
+
+                if (googleCalendarAccessToken) {
+                    showFeedbackToast('🔔 מעדכן תזכורות בכל האימונים הקיימים...');
+                    await backfillSyncAllToGoogleCalendar();
+                    showFeedbackToast(minutesList.length > 0 ? '🔔 התזכורות עודכנו בכל האימונים' : '🔕 תזכורות ההכנה הוסרו');
+                } else {
+                    showFeedbackToast(minutesList.length > 0 ? '🔔 התזכורות נשמרו - יופיעו כשתתחבר ליומן' : '🔕 תזכורות ההכנה כבויות');
+                }
+                renderPrepRemindersSettings();
+            } catch (e) {
+                console.error('שגיאה בשמירת תזכורות הכנה:', e);
+                alert('שגיאה בשמירה. נסה שוב.');
+            }
+        }
+
         async function syncPracticeToGoogleCalendar(practice, dateKey) {
             if (!(await ensureGoogleCalendarConnected())) return 'not_connected';
             if (!practice.time) {
@@ -1803,6 +2007,7 @@
                     const updated = await googleCalendarRequest('PATCH', `events/${practice.googleEventId}`, eventBody);
                     if (updated) {
                         console.log('[Coachoop] אימון עודכן ביומן:', practice.title, dateKey, '-> קישור לאירוע:', updated.htmlLink);
+                        await syncPrepRemindersForPractice(practice, dateKey);
                         return 'updated';
                     }
                     practice.googleEventId = null;
@@ -1811,6 +2016,7 @@
                 if (created && created.id) {
                     practice.googleEventId = created.id;
                     console.log('[Coachoop] אימון נוצר ביומן:', practice.title, dateKey, '-> קישור לאירוע:', created.htmlLink);
+                    await syncPrepRemindersForPractice(practice, dateKey);
                     return 'created';
                 }
                 console.warn('[Coachoop] יצירת אירוע אימון נכשלה (ראה שגיאת Google Calendar API למעלה):', practice.title, dateKey);
@@ -1828,6 +2034,7 @@
             } catch (e) {
                 console.warn('שגיאה במחיקת אימון מהיומן:', e);
             }
+            await deleteAllPrepRemindersForPractice(practice);
         }
 
         // --- סנכרון אימון קבוע (אירוע חוזר ביומן) ---
@@ -1961,11 +2168,14 @@
                     role: 'coach',
                     createdAt: Date.now(),
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
-                    sessionCount: 1
+                    sessionCount: 1,
+                    prepReminders: []
                 });
                 currentUserRole = 'coach';
+                currentUserPrepReminders = [];
             } else {
                 currentUserRole = snap.data().role || 'coach';
+                currentUserPrepReminders = snap.data().prepReminders || [];
                 userRef.update({
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                     sessionCount: firebase.firestore.FieldValue.increment(1)
@@ -2340,6 +2550,7 @@
             if (viewId === 'view-teams-list') { renderTeamsList(); renderGlobalCalendar(); }
             if (viewId === 'view-calendar') renderCalendar();
             if (viewId === 'view-account-settings' || viewId === 'view-recurring') updateGoogleCalendarStatusUI();
+            if (viewId === 'view-account-settings') renderPrepRemindersSettings();
         }
 
         function goBack() {
