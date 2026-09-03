@@ -2,236 +2,42 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Coachoop - מערכת למאמני כדורסל</title>
-<meta name="description" content="Coachoop is a scheduling and team-management app for basketball coaches: practice calendar, player roster, tactical drawing board, and optional Google Calendar sync.">
-<link rel="icon" href="icon-192.png">
-<style>
-    :root {
-        --primary: #ff6b00;
-        --primary-dark: #cc5600;
-        --bg-dark: #121824;
-        --card-bg: #1e293b;
-        --text-light: #f8fafc;
-        --text-muted: #94a3b8;
-        --border-color: #334155;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-        background-color: var(--bg-dark);
-        color: var(--text-light);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        line-height: 1.7;
-    }
-    .wrap { max-width: 820px; margin: 0 auto; padding: 20px; }
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>VoiceCourt - מעקב משחק</title>
 
-    .topbar {
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        background-color: var(--bg-dark);
-        border-bottom: 1px solid var(--border-color);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 20px;
-    }
-    .topbar-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .topbar-brand img {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-    }
-    .topbar-brand span {
-        color: var(--primary);
-        font-weight: bold;
-        font-size: 1.1rem;
-    }
-    .topbar .btn {
-        padding: 8px 18px;
-        font-size: 0.95rem;
-    }
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#070B12">
+<meta name="background-color" content="#070B12">
 
-    header.hero {
-        text-align: center;
-        padding: 40px 20px 40px;
-    }
-    header.hero img {
-        width: 96px;
-        height: 96px;
-        border-radius: 22px;
-        margin-bottom: 14px;
-    }
-    header.hero h1 {
-        color: var(--primary);
-        font-size: 2.2rem;
-    }
-    header.hero p.tagline {
-        color: var(--text-muted);
-        font-size: 1.1rem;
-        margin-top: 8px;
-    }
-    header.hero p.tagline-en {
-        color: var(--text-muted);
-        font-size: 0.9rem;
-        margin-top: 4px;
-        direction: ltr;
-    }
+<!-- Android / Chrome install -->
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192-v2.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32-v2.png">
 
-    .cta-row {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
-        margin-top: 26px;
-        flex-wrap: wrap;
-    }
-    .btn {
-        display: inline-block;
-        background-color: var(--primary);
-        color: white;
-        border: none;
-        padding: 14px 30px;
-        border-radius: 10px;
-        font-size: 1.05rem;
-        font-weight: bold;
-        text-decoration: none;
-        cursor: pointer;
-    }
-    .btn-secondary {
-        background-color: transparent;
-        border: 1px solid var(--border-color);
-        color: var(--text-light);
-    }
+<!-- iOS "Add to Home Screen" support (Safari ignores manifest.json for most of this) -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VoiceCourt">
+<link rel="apple-touch-icon" href="icon-180-v2.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icon-152-v2.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icon-167-v2.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180-v2.png">
 
-    section {
-        background-color: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 18px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-    section h2 {
-        color: var(--primary);
-        font-size: 1.3rem;
-        margin-bottom: 14px;
-    }
-
-    .features {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 16px;
-    }
-    .feature {
-        display: flex;
-        gap: 12px;
-        align-items: flex-start;
-    }
-    .feature .icon { font-size: 1.6rem; }
-    .feature h3 { font-size: 1rem; margin-bottom: 4px; }
-    .feature p { color: var(--text-muted); font-size: 0.9rem; }
-
-    footer {
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.85rem;
-        padding: 30px 0;
-    }
-    footer a { color: #38bdf8; margin: 0 10px; }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-<div class="topbar">
-    <div class="topbar-brand">
-        <img src="icon-192.png" alt="Coachoop logo">
-        <span>Coachoop</span>
-    </div>
-    <a class="btn" href="./app.html">כניסה לאפליקציה</a>
-</div>
-
-<div class="wrap">
-
-    <header class="hero">
-        <img src="icon-512.png" alt="Coachoop logo">
-        <h1>🏀 Coachoop</h1>
-        <p class="tagline">מערכת ניהול קבוצות, שחקנים, אימונים וטקטיקה למאמני כדורסל</p>
-        <p class="tagline-en">Coachoop is a scheduling and team-management app for basketball coaches: practice calendar, player roster, tactical drawing board, and optional Google Calendar sync.</p>
-        <div class="cta-row">
-            <a class="btn" href="./app.html">כניסה לאפליקציה</a>
-        </div>
-    </header>
-
-    <section>
-        <h2>מה זה Coachoop?</h2>
-        <p>Coachoop היא אפליקציית ניהול לקבוצת כדורסל, שנועדה לעזור למאמנים לנהל את כל מה שקשור לקבוצה שלהם במקום אחד: לוח אימונים, סגל שחקנים, תרגילים ולוח טקטי, ואפילו סנכרון ליומן ה-Google האישי של המאמן.</p>
-    </section>
-
-    <section>
-        <h2>יכולות עיקריות</h2>
-        <div class="features">
-            <div class="feature">
-                <div class="icon">📅</div>
-                <div>
-                    <h3>לוח אימונים</h3>
-                    <p>ניהול אימונים בודדים, אימונים קבועים וחגים - תצוגה יומית/שבועית/חודשית.</p>
-                </div>
-            </div>
-            <div class="feature">
-                <div class="icon">👥</div>
-                <div>
-                    <h3>סגל שחקנים</h3>
-                    <p>פרטי שחקנים, פרטי קשר של הורים והערות אישיות לכל שחקן.</p>
-                </div>
-            </div>
-            <div class="feature">
-                <div class="icon">✏️</div>
-                <div>
-                    <h3>לוח טקטי</h3>
-                    <p>בניית תרגילים עם שרטוט חופשי, חצים וסימוני שחקנים על המגרש.</p>
-                </div>
-            </div>
-            <div class="feature">
-                <div class="icon">🖼️</div>
-                <div>
-                    <h3>שיתוף לוז שבועי</h3>
-                    <p>שיתוף תמונה של לוח האימונים השבועי בקלות בוואטסאפ או במייל.</p>
-                </div>
-            </div>
-            <div class="feature">
-                <div class="icon">🔗</div>
-                <div>
-                    <h3>סנכרון ליומן Google</h3>
-                    <p>חיבור אופציונלי שמעדכן את יומן ה-Google האישי של המאמן באימונים.</p>
-                </div>
-            </div>
-            <div class="feature">
-                <div class="icon">🏫</div>
-                <div>
-                    <h3>ניהול קבוצות מרובות</h3>
-                    <p>מאמן שמאמן כמה קבוצות יכול לנהל את כולן מחשבון אחד.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <section>
-        <h2>למי זה מיועד?</h2>
-        <p>Coachoop מיועדת למאמני כדורסל - בליגות נוער, מתנ"סים, בתי ספר ואקדמיות פרטיות - שרוצים כלי אחד ומרוכז לניהול היומיום של הקבוצה, במקום להיעזר בוואטסאפ ואקסל בנפרד.</p>
-    </section>
-
-    <footer>
-        <div>
-            <a href="./app.html">כניסה לאפליקציה</a>
-            <a href="./privacy.html">מדיניות פרטיות</a>
-        </div>
-        <p style="margin-top:14px;">Coachoop &middot; coachoop.com</p>
-    </footer>
-
-</div>
+<div id="app"><div style="padding:40px;text-align:center;color:#8A9AB2;">טוען...</div></div>
+<div class="toast" id="toast"></div>
+<script type="module" src="app.js"></script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(err=>console.warn('SW registration failed', err));
+    });
+  }
+</script>
 </body>
 </html>
