@@ -963,7 +963,7 @@
             </div>
 
             <div class="card" style="margin-bottom:15px;">
-                <h3 style="color:var(--primary); margin-bottom:10px;">➕ הוספת אימון קבוע</h3>
+                <h3 id="recurring-form-title" style="color:var(--primary); margin-bottom:10px;">➕ הוספת אימון קבוע</h3>
                 <div class="form-group">
                     <label>כותרת האימון:</label>
                     <input type="text" id="recurring-title-input" placeholder="למשל: אימון שבועי">
@@ -1006,7 +1006,8 @@
                         <input type="date" id="recurring-end-input">
                     </div>
                 </div>
-                <button class="btn" style="width:100%;" onclick="addRecurringPractice()">הוסף אימון קבוע</button>
+                <button class="btn" id="recurring-submit-btn" style="width:100%;" onclick="addRecurringPractice()">הוסף אימון קבוע</button>
+                <button class="btn btn-secondary" id="recurring-cancel-edit-btn" style="width:100%; margin-top:8px; display:none;" onclick="cancelEditRecurringPractice()">ביטול עריכה</button>
             </div>
 
             <div class="card" style="margin-bottom:15px;">
@@ -2785,7 +2786,15 @@
             updateGoogleCalendarStatusUI();
         }
 
+        // כאשר לא null - מזהה את הכלל שנמצא כרגע בעריכה. הטופס משותף להוספה
+        // ולעריכה כדי לא לשכפל HTML/CSS, ומשנה התנהגות לפי המצב הזה
+        let editingRecurringRuleId = null;
+
         async function addRecurringPractice() {
+            if (editingRecurringRuleId) {
+                return saveRecurringPracticeEdit();
+            }
+
             const team = getCurrentTeam();
             if (!team) return;
 
@@ -2859,10 +2868,92 @@
                             </p>
                             ${(r.startDate || r.endDate) ? `<p style="font-size:0.8rem; color:var(--text-muted);">${r.startDate ? 'מ-' + r.startDate : ''}${r.endDate ? ' עד ' + r.endDate : ''}</p>` : ''}
                         </div>
+                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.75rem; flex-shrink:0;" onclick="startEditRecurringPractice('${r.id}')">✏️ ערוך</button>
                         <button class="btn btn-danger" style="padding:6px 10px; font-size:0.75rem; flex-shrink:0;" onclick="deleteRecurringPractice('${r.id}')">מחק</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function startEditRecurringPractice(ruleId) {
+            const team = getCurrentTeam();
+            const rule = (team.recurringPractices || []).find(r => r.id === ruleId);
+            if (!rule) return;
+
+            editingRecurringRuleId = ruleId;
+
+            document.getElementById('recurring-title-input').value = rule.title || '';
+            document.getElementById('recurring-weekday-input').value = String(rule.weekday);
+            document.getElementById('recurring-time-input').value = rule.time || '';
+            document.getElementById('recurring-endtime-input').value = rule.endTime || '';
+            document.getElementById('recurring-location-input').value = rule.location || '';
+            document.getElementById('recurring-start-input').value = rule.startDate || '';
+            document.getElementById('recurring-end-input').value = rule.endDate || '';
+
+            document.getElementById('recurring-form-title').innerText = '✏️ עריכת אימון קבוע';
+            document.getElementById('recurring-submit-btn').innerText = 'עדכן אימון קבוע';
+            document.getElementById('recurring-cancel-edit-btn').style.display = 'block';
+
+            document.getElementById('recurring-title-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function cancelEditRecurringPractice() {
+            editingRecurringRuleId = null;
+
+            document.getElementById('recurring-title-input').value = '';
+            document.getElementById('recurring-time-input').value = '';
+            document.getElementById('recurring-endtime-input').value = '';
+            document.getElementById('recurring-location-input').value = '';
+            document.getElementById('recurring-start-input').value = '';
+            document.getElementById('recurring-end-input').value = '';
+
+            document.getElementById('recurring-form-title').innerText = '➕ הוספת אימון קבוע';
+            document.getElementById('recurring-submit-btn').innerText = 'הוסף אימון קבוע';
+            document.getElementById('recurring-cancel-edit-btn').style.display = 'none';
+        }
+
+        async function saveRecurringPracticeEdit() {
+            const team = getCurrentTeam();
+            const rule = (team.recurringPractices || []).find(r => r.id === editingRecurringRuleId);
+            if (!rule) { cancelEditRecurringPractice(); return; }
+
+            const title = document.getElementById('recurring-title-input').value.trim() || 'אימון קבוע';
+            const weekday = parseInt(document.getElementById('recurring-weekday-input').value, 10);
+            const time = document.getElementById('recurring-time-input').value;
+            const endTime = document.getElementById('recurring-endtime-input').value;
+            const location = document.getElementById('recurring-location-input').value.trim();
+            const startDate = document.getElementById('recurring-start-input').value || null;
+            const endDate = document.getElementById('recurring-end-input').value || null;
+
+            if (!time) {
+                alert('נא לבחור שעת התחלה לאימון הקבוע');
+                return;
+            }
+
+            const conflict = findRecurringTimeConflict(weekday, time, endTime, rule.id);
+            if (conflict) {
+                const proceed = confirm(
+                    `⚠️ התנגשות בשעות!\n\nכבר קיים אימון קבוע "${conflict.rule.title}" בקבוצה "${conflict.team.name}" באותו יום בשבוע, בין השעות ${formatTimeRange(conflict.rule)}.\n\nלהמשיך ולעדכן בכל זאת?`
+                );
+                if (!proceed) return;
+            }
+
+            rule.title = title;
+            rule.weekday = weekday;
+            rule.time = time;
+            rule.endTime = endTime;
+            rule.location = location;
+            rule.startDate = startDate;
+            rule.endDate = endDate;
+
+            await syncRecurringRuleToGoogleCalendar(rule);
+            saveState();
+
+            cancelEditRecurringPractice();
+            renderRecurringList();
+            alert('האימון הקבוע עודכן! השינוי חל על כל המופעים העתידיים שלו (אימונים בודדים שכבר נערכו ידנית בעבר לא ישתנו).');
         }
 
         async function deleteRecurringPractice(ruleId) {
@@ -2882,6 +2973,7 @@
             }
 
             saveState();
+            if (editingRecurringRuleId === ruleId) cancelEditRecurringPractice();
             renderRecurringList();
             renderCalendar();
         }
