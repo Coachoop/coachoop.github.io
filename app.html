@@ -684,12 +684,14 @@
 
         .actions-row {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             margin-top: 10px;
         }
 
         .actions-row .btn {
             flex: 1;
+            padding: 10px 6px;
+            font-size: 0.85rem;
         }
 
         .date-range-grid {
@@ -1143,7 +1145,7 @@
 
             <div class="actions-row">
                 <button class="btn" onclick="savePracticeData()">שמור אימון</button>
-                <button class="btn btn-info" onclick="duplicatePractice(selectedPracticeId)">📋 שכפל/העתק תרגיל זה</button>
+                <button class="btn btn-info" onclick="duplicatePractice(selectedPracticeId)">📋 העתק אימון</button>
                 <button class="btn btn-danger" onclick="deletePracticeData()">מחק</button>
             </div>
             <button class="btn btn-secondary" onclick="openDayPractices(selectedPracticeDateStr)">חזרה לרשימת אימוני היום</button>
@@ -4235,15 +4237,15 @@
             }
 
             container.innerHTML = practice.exercises.map((ex, index) => `
-                <div class="note-card exercise-drag-item" data-exercise-id="${ex.id}" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <div class="note-card exercise-drag-item" data-exercise-id="${ex.id}" style="display:flex; align-items:flex-start; gap:6px;">
                     <div class="exercise-drag-handle" title="גרור לשינוי סדר">⠿</div>
-                    <div style="flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div style="flex:1; min-width:0;">
                         <div>
                             <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>${getBankSourceBadge(ex)}
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${ex.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט עדיין'}</p>
                             ${getVideoLinkBadge(ex.videoUrl)}
                         </div>
-                        <div style="display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; margin-top:8px;">
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openExerciseEditor('${ex.id}')" title="ערוך תרגיל">✏️</button>
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="duplicateExerciseToOtherDay('${ex.id}')" title="שכפל תרגיל ליום אחר">📋 שכפול</button>
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="moveExerciseToOtherDay('${ex.id}')" title="העבר תרגיל ליום אחר">↗️ העברה</button>
