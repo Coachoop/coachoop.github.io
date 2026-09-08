@@ -4244,7 +4244,7 @@
                             ${getVideoLinkBadge(ex.videoUrl)}
                         </div>
                         <div style="display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
-                            <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openExerciseEditor('${ex.id}')">✏️ ערוך</button>
+                            <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openExerciseEditor('${ex.id}')" title="ערוך תרגיל">✏️</button>
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="duplicateExerciseToOtherDay('${ex.id}')" title="שכפל תרגיל ליום אחר">📋 שכפול</button>
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="moveExerciseToOtherDay('${ex.id}')" title="העבר תרגיל ליום אחר">↗️ העברה</button>
                             <button class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="deleteExercise('${ex.id}')">🗑️</button>
