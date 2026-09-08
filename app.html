@@ -4235,16 +4235,18 @@
             }
 
             container.innerHTML = practice.exercises.map((ex, index) => `
-                <div class="note-card exercise-drag-item" data-exercise-id="${ex.id}" style="display:flex; align-items:center; gap:6px;">
+                <div class="note-card exercise-drag-item" data-exercise-id="${ex.id}" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     <div class="exercise-drag-handle" title="גרור לשינוי סדר">⠿</div>
-                    <div style="flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div style="flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                         <div>
                             <strong>${ex.title || 'תרגיל ' + (index + 1)}</strong>${getBankSourceBadge(ex)}
                             <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">${ex.canvasImg ? '🎨 יש שרטוט' : 'ללא שרטוט עדיין'}</p>
                             ${getVideoLinkBadge(ex.videoUrl)}
                         </div>
-                        <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <div style="display:flex; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
                             <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="openExerciseEditor('${ex.id}')">✏️ ערוך</button>
+                            <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="duplicateExerciseToOtherDay('${ex.id}')" title="שכפל תרגיל ליום אחר">📋 שכפול</button>
+                            <button class="btn btn-secondary" style="padding:6px 10px; font-size:0.8rem;" onclick="moveExerciseToOtherDay('${ex.id}')" title="העבר תרגיל ליום אחר">↗️ העברה</button>
                             <button class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="deleteExercise('${ex.id}')">🗑️</button>
                         </div>
                     </div>
@@ -4360,6 +4362,125 @@
 
             practice.exercises = (practice.exercises || []).filter(e => e.id !== exerciseId);
             saveState();
+            renderExercisesList();
+        }
+
+        // ============================================================
+        // עזר: מציאת/יצירת האימון היעד בתאריך נתון, לצורך שכפול/העברת תרגיל.
+        // אם יש כמה אימונים באותו יום - מבקשים מהמאמן לבחור לאיזה מהם.
+        // אם אין אימון בכלל בתאריך - מציעים ליצור אימון חדש ("אימון") שם.
+        // ============================================================
+        function pickPracticeForDate(team, dateStr) {
+            if (!team.practices) team.practices = {};
+            let list = team.practices[dateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+
+            if (list.length === 0) {
+                if (!confirm(`אין עדיין אימון בתאריך ${dateStr}. ליצור אימון חדש בתאריך זה?`)) return null;
+                const newPractice = {
+                    id: 'prc_' + Date.now(),
+                    title: 'אימון',
+                    time: '',
+                    endTime: '',
+                    location: '',
+                    notes: '',
+                    exercises: []
+                };
+                team.practices[dateStr] = [newPractice];
+                return newPractice;
+            }
+
+            if (list.length === 1) return list[0];
+
+            const optionsText = list.map((p, i) => `${i + 1}. ${p.title || 'אימון'}${p.time ? ' - ' + p.time : ''}`).join('\n');
+            const choice = prompt(`יש כמה אימונים בתאריך ${dateStr}. הכנס את המספר של האימון הרצוי:\n${optionsText}`, '1');
+            if (!choice) return null;
+            const idx = parseInt(choice, 10) - 1;
+            if (isNaN(idx) || idx < 0 || idx >= list.length) {
+                alert('בחירה לא תקינה.');
+                return null;
+            }
+            return list[idx];
+        }
+
+        // --- שכפול תרגיל בודד ליום/אימון אחר (התרגיל המקורי נשאר במקום) ---
+        function duplicateExerciseToOtherDay(exerciseId) {
+            const team = getCurrentTeam();
+            if (!team || !selectedPracticeDateStr) return;
+
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            if (!practice) return;
+
+            const exercise = (practice.exercises || []).find(e => e.id === exerciseId);
+            if (!exercise) return;
+
+            const targetDate = prompt('הכנס תאריך יעד לשכפול התרגיל (בפורמט YYYY-MM-DD):', selectedPracticeDateStr);
+            if (!targetDate) return;
+
+            const targetPractice = pickPracticeForDate(team, targetDate);
+            if (!targetPractice) return;
+
+            if (targetPractice.id === practice.id) {
+                alert('לא ניתן לשכפל תרגיל לאותו האימון. בחר תאריך או אימון אחר.');
+                return;
+            }
+
+            if (!Array.isArray(targetPractice.exercises)) targetPractice.exercises = [];
+
+            const newExercise = {
+                id: 'ex_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+                title: exercise.title,
+                type: exercise.type || 'half',
+                videoUrl: exercise.videoUrl || '',
+                notes: exercise.notes || '',
+                canvasImg: exercise.canvasImg || null
+            };
+            if (exercise.sourceBankDrillId) {
+                newExercise.sourceBankDrillId = exercise.sourceBankDrillId;
+                newExercise.sourceSnapshot = exercise.sourceSnapshot;
+            }
+
+            targetPractice.exercises.push(newExercise);
+            saveState();
+
+            alert(`התרגיל שוכפל בהצלחה ל-${targetDate}${targetPractice.title ? ' (' + targetPractice.title + ')' : ''}!`);
+        }
+
+        // --- העברת תרגיל בודד ליום/אימון אחר (התרגיל נמחק מהאימון הנוכחי) ---
+        function moveExerciseToOtherDay(exerciseId) {
+            const team = getCurrentTeam();
+            if (!team || !selectedPracticeDateStr) return;
+
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+            const practice = list.find(p => p.id === selectedPracticeId);
+            if (!practice) return;
+
+            const exercise = (practice.exercises || []).find(e => e.id === exerciseId);
+            if (!exercise) return;
+
+            const targetDate = prompt('הכנס תאריך יעד להעברת התרגיל (בפורמט YYYY-MM-DD):', selectedPracticeDateStr);
+            if (!targetDate) return;
+
+            const targetPractice = pickPracticeForDate(team, targetDate);
+            if (!targetPractice) return;
+
+            if (targetPractice.id === practice.id) {
+                alert('התרגיל כבר נמצא באימון הזה.');
+                return;
+            }
+
+            if (!confirm(`להעביר את "${exercise.title || 'תרגיל'}" לתאריך ${targetDate}? התרגיל יימחק מהאימון הנוכחי.`)) return;
+
+            if (!Array.isArray(targetPractice.exercises)) targetPractice.exercises = [];
+            targetPractice.exercises.push(exercise);
+
+            practice.exercises = practice.exercises.filter(e => e.id !== exerciseId);
+            saveState();
+
+            alert(`התרגיל הועבר בהצלחה ל-${targetDate}${targetPractice.title ? ' (' + targetPractice.title + ')' : ''}!`);
             renderExercisesList();
         }
 
