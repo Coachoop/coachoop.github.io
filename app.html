@@ -1189,8 +1189,10 @@
                 <div class="tools-bar">
                     <button class="tool-btn active" data-tool="pen" onclick="setTool('pen')">✏️ עיפרון</button>
                     <button class="tool-btn" data-tool="arrow" onclick="setTool('arrow')">🏹 חץ</button>
+                    <button class="tool-btn" data-tool="dashedLine" onclick="setTool('dashedLine')">➖ מקווקו</button>
                     <button class="tool-btn" data-tool="x" onclick="setTool('x')">✖️ X</button>
                     <button class="tool-btn" data-tool="o" onclick="setTool('o')">⭕ O</button>
+                    <button class="tool-btn" data-tool="figure" onclick="setTool('figure')">🧍 דמות</button>
                     <button class="tool-btn" data-tool="eraser" onclick="setTool('eraser')">🧹 מחק</button>
                 </div>
 
@@ -5268,7 +5270,13 @@
                 return;
             }
 
-            if (currentTool === 'arrow') {
+            if (currentTool === 'figure') {
+                drawSymbolFigure(pos.x, pos.y);
+                isDrawing = false;
+                return;
+            }
+
+            if (currentTool === 'arrow' || currentTool === 'dashedLine') {
                 canvasSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
             } else {
                 ctx.beginPath();
@@ -5300,6 +5308,11 @@
                     ctx.putImageData(canvasSnapshot, 0, 0);
                 }
                 drawArrow(startX, startY, pos.x, pos.y, currentColor);
+            } else if (currentTool === 'dashedLine') {
+                if (canvasSnapshot) {
+                    ctx.putImageData(canvasSnapshot, 0, 0);
+                }
+                drawDashedArrow(startX, startY, pos.x, pos.y, currentColor);
             }
         }
 
@@ -5354,6 +5367,52 @@
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, Math.PI * 2);
             ctx.stroke();
+        }
+
+        // קו מקווקו עם ראש חץ - לסימון תנועת שחקן ללא כדור (נגזר / חיתוך), בניגוד לחץ הרציף שמסמן מסירה
+        function drawDashedArrow(fromX, fromY, toX, toY, color) {
+            const headLen = 12;
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const angle = Math.atan2(dy, dx);
+
+            ctx.strokeStyle = color;
+            ctx.fillStyle = color;
+            ctx.lineWidth = 4;
+
+            ctx.setLineDash([9, 7]);
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headLen * Math.cos(angle - Math.PI / 6), toY - headLen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headLen * Math.cos(angle + Math.PI / 6), toY - headLen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(toX, toY);
+            ctx.fill();
+        }
+
+        // דמות שחקן פשוטה (ראש + גוף) - חותמת בודדת בלחיצה, כמו X ו-O
+        function drawSymbolFigure(x, y) {
+            ctx.strokeStyle = currentColor;
+            ctx.fillStyle = currentColor;
+            ctx.lineWidth = 3;
+
+            // ראש
+            ctx.beginPath();
+            ctx.arc(x, y - 10, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // גוף (משולש - קריא גם בגודל קטן על המגרש)
+            ctx.beginPath();
+            ctx.moveTo(x, y - 5);
+            ctx.lineTo(x - 8, y + 10);
+            ctx.lineTo(x + 8, y + 10);
+            ctx.closePath();
+            ctx.fill();
         }
 
         // --- 3. ניהול ועריכת שחקנים ---
