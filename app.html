@@ -1609,6 +1609,11 @@
                         }).catch(() => {});
                         localStorage.setItem(CALENDAR_AUTOCONNECT_KEY, 'true');
                         updateGoogleCalendarStatusUI();
+                        if (pendingPracticeDeleteAfterReconnect) {
+                            const { practiceId, dateKey } = pendingPracticeDeleteAfterReconnect;
+                            pendingPracticeDeleteAfterReconnect = null;
+                            completePendingPracticeDelete(practiceId, dateKey);
+                        }
                         if (pendingManualCalendarConnect) {
                             pendingManualCalendarConnect = false;
                             backfillSyncAllToGoogleCalendar().then((stats) => {
@@ -1679,6 +1684,10 @@
         // דגל שמסמן שהמשתמש עצמו לחץ על "חבר יומן Google" (בניגוד לניסיון שקט ברקע),
         // כדי שנדע אם להציג הודעת הצלחה/כישלון או לא
         let pendingManualCalendarConnect = false;
+
+        // כשמחיקת אימון נחסמת כי היומן מנותק (ראו deletePracticeById), נשמר כאן
+        // מה למחוק בפועל ברגע שהחיבור יחזור - כדי שהמחיקה תושלם אוטומטית ולא תישכח
+        let pendingPracticeDeleteAfterReconnect = null;
 
         function connectGoogleCalendar() {
             const client = getGoogleTokenClient();
@@ -2045,14 +2054,26 @@
             }
         }
 
+        // מוחק את האירוע המקושר ביומן Google (אם יש) ואת תזכורות ה"הכן אימון" שלו.
+        // מחזיר סטטוס כדי שנוכל להתריע למאמן אם המחיקה מהיומן לא הצליחה בפועל -
+        // במקום שהאימון "יעלם" מהאפליקציה אבל יישאר תקוע ביומן Google בלי שידע.
         async function deletePracticeGoogleEvent(practice) {
-            if (!practice || !practice.googleEventId || !(await ensureGoogleCalendarConnected())) return;
-            try {
-                await googleCalendarRequest('DELETE', `events/${practice.googleEventId}`);
-            } catch (e) {
-                console.warn('שגיאה במחיקת אימון מהיומן:', e);
+            let status = 'no_event';
+            if (practice && practice.googleEventId) {
+                if (!(await ensureGoogleCalendarConnected())) {
+                    status = 'not_connected';
+                } else {
+                    try {
+                        await googleCalendarRequest('DELETE', `events/${practice.googleEventId}`);
+                        status = 'success';
+                    } catch (e) {
+                        console.warn('שגיאה במחיקת אימון מהיומן:', e);
+                        status = 'failed';
+                    }
+                }
             }
             await deleteAllPrepRemindersForPractice(practice);
+            return status;
         }
 
         // --- סנכרון אימון קבוע (אירוע חוזר ביומן) ---
@@ -2325,16 +2346,46 @@
                 });
         }
 
-        function showFeedbackToast(text) {
+        // מציג טוסט הודעה. action (אופציונלי) מוסיף כפתור פעולה בתוך הטוסט עצמו
+        // (למשל "התחבר מחדש"), כדי שהמאמן יוכל לפעול ישר מההודעה בלי לנווט להגדרות.
+        function showFeedbackToast(text, action) {
             const toast = document.getElementById('feedback-toast');
             if (!toast) return;
-            toast.innerText = text;
-            toast.style.display = 'block';
+
+            toast.innerHTML = '';
+            toast.style.display = 'flex';
+            toast.style.alignItems = 'center';
+            toast.style.gap = '10px';
+
+            const textSpan = document.createElement('span');
+            textSpan.innerText = text;
+            toast.appendChild(textSpan);
+
+            if (action && action.label && typeof action.onClick === 'function') {
+                const btn = document.createElement('button');
+                btn.innerText = action.label;
+                btn.style.cssText = 'flex-shrink:0; background:#0f172a; color:white; border:none; padding:5px 12px; border-radius:6px; font-weight:bold; font-size:0.85rem; cursor:pointer;';
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    hideFeedbackToast();
+                    action.onClick();
+                };
+                toast.appendChild(btn);
+            }
+
             toast.style.opacity = '1';
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => { toast.style.display = 'none'; }, 400);
-            }, 4000);
+
+            if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
+            const duration = action ? 8000 : 4000;
+            toast._hideTimeout = setTimeout(hideFeedbackToast, duration);
+        }
+
+        function hideFeedbackToast() {
+            const toast = document.getElementById('feedback-toast');
+            if (!toast) return;
+            if (toast._hideTimeout) clearTimeout(toast._hideTimeout);
+            toast.style.opacity = '0';
+            setTimeout(() => { toast.style.display = 'none'; }, 400);
         }
 
         function openAdminFeedbackFromBell() {
@@ -4843,20 +4894,68 @@
         }
 
         async function deletePracticeById(practiceId) {
-            if (confirm('האם למחוק תרגיל זה?')) {
-                const team = getCurrentTeam();
-                if (team.practices && team.practices[selectedPracticeDateStr]) {
-                    let list = team.practices[selectedPracticeDateStr];
-                    if (!Array.isArray(list)) list = [list];
+            if (!confirm('האם למחוק תרגיל זה?')) return;
 
-                    const practiceToDelete = list.find(p => p.id === practiceId);
-                    await deletePracticeGoogleEvent(practiceToDelete);
+            const team = getCurrentTeam();
+            if (!team.practices || !team.practices[selectedPracticeDateStr]) return;
 
-                    team.practices[selectedPracticeDateStr] = list.filter(p => p.id !== practiceId);
-                    saveState();
-                    renderDayPracticesList();
-                }
+            let list = team.practices[selectedPracticeDateStr];
+            if (!Array.isArray(list)) list = [list];
+
+            const practiceToDelete = list.find(p => p.id === practiceId);
+            if (!practiceToDelete) return;
+
+            // אם האימון מסונכרן ליומן Google אבל החיבור לא פעיל כרגע - לא מוחקים בכלל,
+            // כדי לא להשאיר אירוע "יתום" תקוע ביומן בלי שהמאמן ידע. נותנים לו לבחור
+            // להתחבר מחדש ואז למחוק את שניהם יחד, או לבטל ולא למחוק כלום בינתיים.
+            if (practiceToDelete.googleEventId && !(await ensureGoogleCalendarConnected())) {
+                const wantsToConnect = confirm(
+                    'האימון הזה מסונכרן עם יומן Google, אבל החיבור פג - ולכן לא ניתן למחוק אותו גם מהיומן כרגע.\n\n' +
+                    'לחץ "אישור" כדי להתחבר מחדש, ואז האימון יימחק אוטומטית - גם מהאפליקציה וגם מהיומן.\n' +
+                    'לחץ "ביטול" כדי לא למחוק כלום בינתיים.'
+                );
+                if (!wantsToConnect) return;
+
+                pendingPracticeDeleteAfterReconnect = { practiceId, dateKey: selectedPracticeDateStr };
+                connectGoogleCalendar();
+                return;
             }
+
+            await performPracticeDeletion(practiceToDelete, team, selectedPracticeDateStr);
+        }
+
+        // מבצעת בפועל את מחיקת האימון (מהאפליקציה + מיומן Google אם רלוונטי).
+        // מופרדת מ-deletePracticeById כדי שאפשר יהיה להשלים מחיקה שהמתינה לחיבור מחדש ליומן.
+        async function performPracticeDeletion(practiceToDelete, team, dateKey) {
+            const deleteSyncResult = await deletePracticeGoogleEvent(practiceToDelete);
+
+            let list = team.practices[dateKey] || [];
+            if (!Array.isArray(list)) list = [list];
+            team.practices[dateKey] = list.filter(p => p.id !== practiceToDelete.id);
+            saveState();
+
+            if (selectedPracticeDateStr === dateKey) {
+                renderDayPracticesList();
+            }
+
+            if (deleteSyncResult === 'failed') {
+                showFeedbackToast('⚠️ האימון נמחק מהאפליקציה, אך מחיקתו מיומן Google נכשלה. תצטרך למחוק אותו ידנית מהיומן.');
+            } else if (deleteSyncResult === 'success') {
+                showFeedbackToast('🗑️ האימון נמחק - גם מהאפליקציה וגם מיומן Google.');
+            }
+        }
+
+        // משלים מחיקת אימון שהמתינה לחיבור מחדש ליומן Google (ראו deletePracticeById)
+        async function completePendingPracticeDelete(practiceId, dateKey) {
+            const team = getCurrentTeam();
+            if (!team || !team.practices || !team.practices[dateKey]) return;
+
+            let list = team.practices[dateKey];
+            if (!Array.isArray(list)) list = [list];
+            const practiceToDelete = list.find(p => p.id === practiceId);
+            if (!practiceToDelete) return;
+
+            await performPracticeDeletion(practiceToDelete, team, dateKey);
         }
 
         function deletePracticeData() {
