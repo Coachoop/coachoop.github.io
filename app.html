@@ -4018,7 +4018,8 @@
                     </div>
                     <div class="practice-actions-row">
                         <button class="btn" style="padding: 6px 12px; font-size:0.85rem;" onclick="editPractice('${practice.id}')">✏️ ערוך</button>
-                        <button class="btn btn-info" style="padding: 6px 12px; font-size:0.85rem;" onclick="duplicatePractice('${practice.id}')">📋 שכפל / העתק</button>
+                        <button class="btn btn-info" style="padding: 6px 12px; font-size:0.85rem;" onclick="duplicatePractice('${practice.id}')">📋 שכפל</button>
+                        <button class="btn btn-info" style="padding: 6px 12px; font-size:0.85rem;" onclick="movePracticeToOtherDay('${practice.id}')">➡️ העבר</button>
                         <button class="btn btn-danger" style="padding: 6px 10px; font-size:0.85rem;" onclick="deletePracticeById('${practice.id}')">🗑️ מחק</button>
                     </div>
                 `;
@@ -4160,6 +4161,47 @@
             if (targetDate === selectedPracticeDateStr) {
                 renderDayPracticesList();
             }
+        }
+
+        // --- פונקציית העברת אימון ליום אחר (נמחק מהתאריך המקורי) ---
+        async function movePracticeToOtherDay(practiceId) {
+            const team = getCurrentTeam();
+            if (!team || !selectedPracticeDateStr) return;
+
+            let list = team.practices[selectedPracticeDateStr] || [];
+            if (!Array.isArray(list)) list = [list];
+
+            const practiceToMove = list.find(p => p.id === practiceId);
+            if (!practiceToMove) return;
+
+            const targetDate = prompt('הכנס תאריך יעד להעברת האימון (בפורמט YYYY-MM-DD):', selectedPracticeDateStr);
+            if (!targetDate) return;
+
+            if (targetDate === selectedPracticeDateStr) {
+                alert('האימון כבר נמצא בתאריך הזה.');
+                return;
+            }
+
+            if (!confirm(`להעביר את "${practiceToMove.title || 'אימון'}" לתאריך ${targetDate}? האימון יימחק מהתאריך הנוכחי.`)) return;
+
+            if (!team.practices[targetDate]) {
+                team.practices[targetDate] = [];
+            } else if (!Array.isArray(team.practices[targetDate])) {
+                team.practices[targetDate] = [team.practices[targetDate]];
+            }
+
+            // מסירים מהתאריך המקורי, ומוסיפים לתאריך היעד - אותו אובייקט אימון (לא עותק)
+            team.practices[selectedPracticeDateStr] = list.filter(p => p.id !== practiceId);
+            team.practices[targetDate].push(practiceToMove);
+
+            saveState();
+
+            // מעדכן את האירוע הקיים ביומן Google (אם מחובר) לתאריך החדש, במקום ליצור אירוע כפול
+            const syncResult = await syncPracticeToGoogleCalendar(practiceToMove, targetDate);
+            notifyCalendarSyncResult(syncResult);
+
+            alert(`האימון הועבר בהצלחה לתאריך ${targetDate}!`);
+            renderDayPracticesList();
         }
 
         let selectedExerciseId = null;
