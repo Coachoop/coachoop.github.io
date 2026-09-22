@@ -1128,6 +1128,10 @@
                     <textarea id="practice-notes-input" placeholder="רשום הערות, תרגילים, מטרות..."></textarea>
                 </div>
                 <div class="form-group">
+                    <label>📌 הערות שיופיעו בלוז (יוצגו מודגשות בתמונת השיתוף השבועי):</label>
+                    <textarea id="practice-schedule-notes-input" placeholder="למשל: להביא ציוד מלא / אימון מיוחד השבוע..."></textarea>
+                </div>
+                <div class="form-group">
                     <label>🎥 קישור וידאו כללי לאימון (YouTube / Facebook / Instagram):</label>
                     <input type="url" id="practice-video-input" placeholder="הדבק כאן קישור לסרטון הדגמה כללי לאימון">
                 </div>
@@ -3480,9 +3484,13 @@
                 } else if (day.practices.length > 0) {
                     let totalLines = 0;
                     day.practices.forEach(p => {
-                        const lines = wrapCanvasText(measureCtx, getPracticeLineText(p), contentMaxWidth);
-                        p.__lines = lines;
-                        totalLines += lines.length;
+                        const infoLines = wrapCanvasText(measureCtx, getPracticeLineText(p), contentMaxWidth).map(text => ({ text, isNote: false }));
+                        let noteLines = [];
+                        if (p.scheduleNotes && p.scheduleNotes.trim()) {
+                            noteLines = wrapCanvasText(measureCtx, `📌 ${p.scheduleNotes.trim()}`, contentMaxWidth).map(text => ({ text, isNote: true }));
+                        }
+                        p.__lines = infoLines.concat(noteLines);
+                        totalLines += p.__lines.length;
                     });
                     contentH = totalLines * practiceLineH;
                 } else {
@@ -3564,14 +3572,19 @@
                     ctx.font = 'bold 18px Arial';
                     ctx.fillText(`🎌 ${day.holiday.name} - אין אימון`, contentRightX, centerY + 6);
                 } else if (day.practices.length > 0) {
-                    const allLines = day.practices.flatMap(p => p.__lines || [getPracticeLineText(p)]);
+                    const allLines = day.practices.flatMap(p => p.__lines || [{ text: getPracticeLineText(p), isNote: false }]);
                     const blockH = allLines.length * practiceLineH;
                     const blockStartY = centerY - (blockH / 2) + (practiceLineH / 2) + 6;
 
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 17px Arial';
                     allLines.forEach((line, lineIndex) => {
-                        ctx.fillText(line, contentRightX, blockStartY + (lineIndex * practiceLineH));
+                        if (line.isNote) {
+                            ctx.fillStyle = teamColor;
+                            ctx.font = 'bold 17px Arial';
+                        } else {
+                            ctx.fillStyle = '#ffffff';
+                            ctx.font = 'bold 17px Arial';
+                        }
+                        ctx.fillText(line.text, contentRightX, blockStartY + (lineIndex * practiceLineH));
                     });
                 } else {
                     // אין אימון - נשאר באפור, כמו קודם
@@ -4182,6 +4195,7 @@
             document.getElementById('practice-endtime-input').value = practice.endTime || '';
             document.getElementById('practice-location-input').value = practice.location || '';
             document.getElementById('practice-notes-input').value = practice.notes || '';
+            document.getElementById('practice-schedule-notes-input').value = practice.scheduleNotes || '';
             document.getElementById('practice-video-input').value = practice.videoUrl || '';
 
             renderExercisesList();
@@ -4742,6 +4756,7 @@
             practice.endTime = newEndTime;
             practice.location = document.getElementById('practice-location-input').value.trim();
             practice.notes = document.getElementById('practice-notes-input').value;
+            practice.scheduleNotes = document.getElementById('practice-schedule-notes-input').value.trim();
             practice.videoUrl = document.getElementById('practice-video-input').value.trim();
 
             const syncResult = await syncPracticeToGoogleCalendar(practice, selectedPracticeDateStr);
