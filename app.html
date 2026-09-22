@@ -1128,7 +1128,7 @@
                     <textarea id="practice-notes-input" placeholder="רשום הערות, תרגילים, מטרות..."></textarea>
                 </div>
                 <div class="form-group">
-                    <label>🏀 הערות שיופיעו בלוז (יוצגו מודגשות בתמונת השיתוף השבועי):</label>
+                    <label>📣 הערות שיופיעו בלוז (יוצגו מודגשות בתמונת השיתוף השבועי):</label>
                     <textarea id="practice-schedule-notes-input" placeholder="למשל: להביא ציוד מלא / אימון מיוחד השבוע..."></textarea>
                 </div>
                 <div class="form-group">
@@ -3487,7 +3487,7 @@
                         const infoLines = wrapCanvasText(measureCtx, getPracticeLineText(p), contentMaxWidth).map(text => ({ text, isNote: false }));
                         let noteLines = [];
                         if (p.scheduleNotes && p.scheduleNotes.trim()) {
-                            noteLines = wrapCanvasText(measureCtx, `🏀 ${p.scheduleNotes.trim()}`, contentMaxWidth).map(text => ({ text, isNote: true }));
+                            noteLines = wrapCanvasText(measureCtx, `📣 ${p.scheduleNotes.trim()}`, contentMaxWidth).map(text => ({ text, isNote: true }));
                         }
                         p.__lines = infoLines.concat(noteLines);
                         totalLines += p.__lines.length;
