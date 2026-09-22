@@ -1085,11 +1085,11 @@
             </div>
         </div>
 
-        <!-- מסך אימוני היום (מאפשר מספר אימונים/תרגילים ושכפול!) -->
+        <!-- מסך אימוני היום (מאפשר מספר אימונים/משחקים ושכפול!) -->
         <div id="view-day-practices" class="view">
             <h2 id="day-practices-title">אימונים לתאריך</h2>
 
-            <button class="btn" style="margin-bottom: 10px;" onclick="createNewPracticeForSelectedDay()">➕ הוסף אימון/תרגיל חדש ליום זה</button>
+            <button class="btn" style="margin-bottom: 10px;" onclick="createNewPracticeForSelectedDay()">➕ הוסף אימון/משחק חדש ליום זה</button>
 
             <div id="day-practices-container">
                 <!-- רשימת אימוני היום ייטענו דינמית -->
@@ -3405,7 +3405,7 @@
             addBtn.className = 'btn';
             addBtn.style.width = '100%';
             addBtn.style.marginTop = '10px';
-            addBtn.innerText = '➕ הוסף אימון/תרגיל ליום זה';
+            addBtn.innerText = '➕ הוסף אימון/משחק ליום זה';
             addBtn.onclick = () => openDayPractices(dateKey);
             grid.appendChild(addBtn);
         }
@@ -3972,7 +3972,7 @@
             const virtualPractices = getRecurringInstancesForDate(team, selectedPracticeDateStr);
 
             if (practices.length === 0 && virtualPractices.length === 0) {
-                container.innerHTML += '<div class="card"><p style="color:var(--text-muted)">אין אימונים/תרגילים מוגדרים ליום זה עדיין. לחץ "הוסף אימון" כדי ליצור אחד!</p></div>';
+                container.innerHTML += '<div class="card"><p style="color:var(--text-muted)">אין אימונים או משחקים מוגדרים ליום זה עדיין.</p></div>';
                 return;
             }
 
