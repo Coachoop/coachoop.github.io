@@ -1262,6 +1262,10 @@
                     <input type="text" id="player-position" placeholder="למשל: רכז / פורוורד">
                 </div>
                 <div class="form-group">
+                    <label>🎂 תאריך לידה:</label>
+                    <input type="date" id="player-birthdate">
+                </div>
+                <div class="form-group">
                     <label>טלפון השחקן:</label>
                     <input type="tel" id="player-phone" placeholder="050-1234567">
                 </div>
@@ -5503,6 +5507,7 @@
                     document.getElementById('player-name').value = player.name;
                     document.getElementById('player-number').value = player.number;
                     document.getElementById('player-position').value = player.position || '';
+                    document.getElementById('player-birthdate').value = player.birthDate || '';
                     document.getElementById('player-phone').value = player.phone || '';
                     document.getElementById('player-parent1-name').value = player.parent1Name || '';
                     document.getElementById('player-parent1-phone').value = player.parent1Phone || '';
@@ -5527,6 +5532,7 @@
                 document.getElementById('player-name').value = '';
                 document.getElementById('player-number').value = '';
                 document.getElementById('player-position').value = '';
+                document.getElementById('player-birthdate').value = '';
                 document.getElementById('player-phone').value = '';
                 document.getElementById('player-parent1-name').value = '';
                 document.getElementById('player-parent1-phone').value = '';
@@ -5595,6 +5601,7 @@
             const name = document.getElementById('player-name').value.trim();
             const number = document.getElementById('player-number').value.trim();
             const position = document.getElementById('player-position').value.trim();
+            const birthDate = document.getElementById('player-birthdate').value;
             const phone = document.getElementById('player-phone').value.trim();
             const parent1Name = document.getElementById('player-parent1-name').value.trim();
             const parent1Phone = document.getElementById('player-parent1-phone').value.trim();
@@ -5619,6 +5626,7 @@
                     player.name = name;
                     player.number = number;
                     player.position = position;
+                    player.birthDate = birthDate;
                     player.phone = phone;
                     player.parent1Name = parent1Name;
                     player.parent1Phone = parent1Phone;
@@ -5632,6 +5640,7 @@
                     name: name,
                     number: number,
                     position: position,
+                    birthDate: birthDate,
                     phone: phone,
                     parent1Name: parent1Name,
                     parent1Phone: parent1Phone,
@@ -5684,6 +5693,33 @@
             `;
         }
 
+        // מחשב כמה ימים נשארו עד יום ההולדת הבא של השחקן (מחזורי - עובר לשנה הבאה אם כבר עבר השנה)
+        // שחקן בלי תאריך לידה מקבל Infinity, כך שהוא תמיד יורד לסוף הרשימה
+        function daysUntilNextBirthday(birthDateStr) {
+            if (!birthDateStr) return Infinity;
+            const parts = birthDateStr.split('-');
+            if (parts.length !== 3) return Infinity;
+            const month = parseInt(parts[1], 10);
+            const day = parseInt(parts[2], 10);
+            if (isNaN(month) || isNaN(day)) return Infinity;
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let nextBirthday = new Date(today.getFullYear(), month - 1, day);
+            if (nextBirthday < today) {
+                nextBirthday = new Date(today.getFullYear() + 1, month - 1, day);
+            }
+
+            return Math.round((nextBirthday - today) / (1000 * 60 * 60 * 24));
+        }
+
+        function formatBirthDateDisplay(birthDateStr) {
+            const parts = (birthDateStr || '').split('-');
+            if (parts.length !== 3) return '';
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
         function renderPlayersList() {
             const container = document.getElementById('players-container');
             container.innerHTML = '';
@@ -5700,7 +5736,9 @@
                 return;
             }
 
-            team.players.forEach(p => {
+            const sortedPlayers = [...team.players].sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
+
+            sortedPlayers.forEach(p => {
                 const item = document.createElement('div');
                 item.className = 'player-item';
                 item.style.alignItems = 'flex-start';
@@ -5732,6 +5770,7 @@
                         <h3 style="color:var(--primary);">${p.number ? '#' + p.number + ' - ' : ''}${p.name}</h3>
                         <div id="${detailsId}" class="player-details collapsed">
                             <p style="font-size:0.85rem; color:var(--text-muted);">${p.position ? 'עמדה: ' + p.position : ''}</p>
+                            ${p.birthDate ? `<p style="font-size:0.85rem; color:var(--text-muted);">🎂 ${formatBirthDateDisplay(p.birthDate)}</p>` : ''}
                             ${phoneLine}
                             ${parent1Line}
                             ${parent2Line}
