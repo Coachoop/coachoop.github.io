@@ -5883,10 +5883,29 @@
                             <button class="btn btn-danger" style="padding: 2px 8px; font-size:0.75rem;" onclick="deleteNote('${note.id}')">מחק</button>
                         </div>
                     </div>
-                    ${note.title ? `<h4 style="color:var(--primary); margin-top:6px;">${note.title}</h4>` : ''}
-                    <p style="white-space: pre-wrap; font-size:0.95rem;">${note.text}</p>
+                    ${note.title ? `<h4 style="color:var(--primary); margin-top:6px; overflow-wrap:break-word;">${escapeHtml(note.title)}</h4>` : ''}
+                    <p style="white-space: pre-wrap; font-size:0.95rem; overflow-wrap:break-word; word-break:break-word;">${linkifyText(note.text)}</p>
                 `;
                 container.appendChild(card);
+            });
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // הופך URL-ים בתוך טקסט חופשי לקישורים לחיצים, ובורח משאר הטקסט כדי לא לשבור את התצוגה
+        function linkifyText(text) {
+            const escaped = escapeHtml(text || '');
+            const urlRegex = /((https?:\/\/|www\.)[^\s<]+)/g;
+            return escaped.replace(urlRegex, (match) => {
+                const href = /^https?:\/\//i.test(match) ? match : 'https://' + match;
+                return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:underline; overflow-wrap:break-word; word-break:break-all;">${match}</a>`;
             });
         }
 
