@@ -1055,7 +1055,10 @@
                 <button class="court-type-btn selected" id="cal-view-month-btn" onclick="setCalendarViewMode('month')">חודשי</button>
             </div>
 
-            <button class="btn" style="width:100%; margin-bottom:15px;" onclick="shareWeeklyScheduleImage()">📸 שיתוף לוז שבועי (וואטסאפ / מייל)</button>
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <button class="btn" style="flex:1;" onclick="shareWeeklyScheduleImage()">📸 שיתוף לוז השבוע</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="shareNextWeekScheduleImage()">📤 שיתוף לוז שבוע הבא</button>
+            </div>
 
             <div class="calendar-header">
                 <button class="btn btn-secondary" style="padding: 6px 12px;" onclick="changeMonth(-1)" id="cal-prev-btn">❮ חודש קודם</button>
@@ -1227,7 +1230,7 @@
                 <button class="btn" onclick="saveExerciseData()">שמור וחזור לאימון</button>
             </div>
             <div class="actions-row" id="court-actions-exercise-2">
-                <button class="btn btn-secondary" id="save-to-bank-btn" style="flex:1;" onclick="saveCurrentExerciseToBank()">📚 שמור עותק לבנק</button>
+                <button class="btn btn-secondary" id="save-to-bank-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;" onclick="saveCurrentExerciseToBank()"><span>📚</span><span>שמור עותק לבנק</span></button>
                 <button class="btn btn-secondary" style="flex:1;" onclick="showView('view-practice-edit')">חזרה לעריכת אימון</button>
             </div>
 
@@ -3473,14 +3476,21 @@
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
-        async function shareWeeklyScheduleImage() {
+        // קיצור: משתף את לו"ז השבוע הבא (7 ימים מהיום), בלי קשר לאיזה שבוע מוצג כרגע על המסך
+        function shareNextWeekScheduleImage() {
+            const nextWeekReference = new Date();
+            nextWeekReference.setDate(nextWeekReference.getDate() + 7);
+            shareWeeklyScheduleImage(nextWeekReference);
+        }
+
+        async function shareWeeklyScheduleImage(referenceDate = currentDate) {
             const team = getCurrentTeam();
             if (!team) return;
 
             logAppEvent('share_weekly_schedule', { team_id: team.id || null });
 
             const teamColor = getTeamColor(team);
-            const weekStart = getWeekStart(currentDate);
+            const weekStart = getWeekStart(referenceDate);
 
             const days = [];
             for (let i = 0; i < 7; i++) {
