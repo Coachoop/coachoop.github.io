@@ -3496,11 +3496,15 @@
             return formatDateKey(d);
         }
 
-        // --- מודל "שיתוף לוז שבועי": ברירת מחדל השבוע הבא, אפשר לבחור כל תאריך אחר ---
+        // --- מודל "שיתוף לוז שבועי": ברירת מחדל השבוע הבא (א'-ש'), אפשר לבחור כל טווח אחר ---
         function openShareWeekModal() {
             const modal = document.getElementById('share-week-modal');
             if (!modal) return;
-            document.getElementById('share-week-date-input').value = getDateKeyOffsetFromToday(7);
+            const nextWeekStart = getWeekStart(new Date(new Date().setDate(new Date().getDate() + 7)));
+            const nextWeekEnd = new Date(nextWeekStart);
+            nextWeekEnd.setDate(nextWeekEnd.getDate() + 6);
+            document.getElementById('share-week-from-input').value = formatDateKey(nextWeekStart);
+            document.getElementById('share-week-to-input').value = formatDateKey(nextWeekEnd);
             modal.style.display = 'flex';
         }
 
@@ -3510,15 +3514,30 @@
         }
 
         function confirmShareWeek() {
-            const value = document.getElementById('share-week-date-input').value;
-            if (!value) {
-                alert('נא לבחור תאריך.');
+            const fromValue = document.getElementById('share-week-from-input').value;
+            const toValue = document.getElementById('share-week-to-input').value;
+            if (!fromValue || !toValue) {
+                alert('נא לבחור טווח תאריכים מלא.');
                 return;
             }
-            const parts = value.split('-').map(Number);
-            const chosenDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            if (toValue < fromValue) {
+                alert('תאריך "עד" לא יכול להיות לפני תאריך "מתאריך".');
+                return;
+            }
+
+            const fromParts = fromValue.split('-').map(Number);
+            const toParts = toValue.split('-').map(Number);
+            const from = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+            const to = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+            const numDays = Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
+
+            if (numDays > 14) {
+                alert('טווח "לוז שבועי" מוגבל ל-14 יום לכל היותר, כדי שהתמונה תישאר קריאה. לטווח ארוך יותר, מומלץ להשתמש ב"שיתוף לוז משחקים" במקום.');
+                return;
+            }
+
             closeShareWeekModal();
-            shareWeeklyScheduleImage(chosenDate);
+            shareWeeklyScheduleImage(fromValue, toValue);
         }
 
         // --- מודל "שיתוף לוז משחקים": טווח תאריכים, ברירת מחדל מהיום עד עוד חודש ---
@@ -3550,31 +3569,35 @@
             shareGamesScheduleImage(fromValue, toValue);
         }
 
-        async function shareWeeklyScheduleImage(referenceDate = currentDate) {
+        async function shareWeeklyScheduleImage(fromDateStr, toDateStr) {
             const team = getCurrentTeam();
             if (!team) return;
 
             logAppEvent('share_weekly_schedule', { team_id: team.id || null });
 
             const teamColor = getTeamColor(team);
-            const weekStart = getWeekStart(referenceDate);
+            const fromParts = fromDateStr.split('-').map(Number);
+            const toParts = toDateStr.split('-').map(Number);
+            const rangeStart = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+            const rangeEnd = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+            const numDays = Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24)) + 1;
 
             const days = [];
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(weekStart);
+            for (let i = 0; i < numDays; i++) {
+                const d = new Date(rangeStart);
                 d.setDate(d.getDate() + i);
                 const dateKey = formatDateKey(d);
                 days.push({
                     date: d,
                     dateKey,
-                    weekdayName: HEBREW_WEEKDAYS_FULL[i],
+                    weekdayName: HEBREW_WEEKDAYS_FULL[d.getDay()],
                     practices: getEffectivePracticesForDate(team, dateKey).slice().sort((a, b) => (a.time || '').localeCompare(b.time || '')),
                     holiday: getHolidayInfo(team, dateKey)
                 });
             }
 
-            const weekEnd = days[6].date;
-            const rangeText = `${weekStart.getDate()}/${weekStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`;
+            const weekEnd = days[days.length - 1].date;
+            const rangeText = `${rangeStart.getDate()}/${rangeStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`;
 
             function getPracticeLineText(p) {
                 return `${p.title || 'אימון'}  •  ${formatTimeRange(p)}${p.location ? '  •  ' + p.location : ''}`;
@@ -6485,9 +6508,15 @@
     <div id="share-week-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
         <div class="card" style="max-width:400px; width:100%;">
             <h3 style="color:var(--primary); margin-bottom:10px;">📸 שיתוף לוז שבועי</h3>
-            <div class="form-group">
-                <label>בחר תאריך כלשהו בתוך השבוע שברצונך לשתף:</label>
-                <input type="date" id="share-week-date-input">
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>מתאריך:</label>
+                    <input type="date" id="share-week-from-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>עד תאריך:</label>
+                    <input type="date" id="share-week-to-input">
+                </div>
             </div>
             <div class="actions-row">
                 <button class="btn" style="flex:1;" onclick="confirmShareWeek()">שתף</button>
