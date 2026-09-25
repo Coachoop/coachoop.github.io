@@ -1113,9 +1113,9 @@
                     <label>כותרת / שם האימון או התרגיל:</label>
                     <input type="text" id="practice-title-input" placeholder="למשל: אימון בוקר / תרגיל התקפה">
                 </div>
-                <div class="form-group" style="display:flex; align-items:center; gap:8px;">
-                    <input type="checkbox" id="practice-is-game-input" style="width:18px; height:18px; cursor:pointer;">
-                    <label for="practice-is-game-input" style="margin:0; cursor:pointer;">🏀 זהו משחק (ייכלל בשיתוף "לוז משחקים")</label>
+                <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:8px;">
+                    <input type="checkbox" id="practice-is-game-input" style="width:18px; height:18px; cursor:pointer; flex-shrink:0;">
+                    <label for="practice-is-game-input" style="margin:0; cursor:pointer; font-weight:normal;">🏀 זהו משחק (ייכלל בשיתוף "לוז משחקים")</label>
                 </div>
 
                 <div style="display: flex; gap: 10px;">
@@ -3544,8 +3544,19 @@
         function openShareGamesModal() {
             const modal = document.getElementById('share-games-modal');
             if (!modal) return;
-            document.getElementById('share-games-from-input').value = getDateKeyOffsetFromToday(0);
-            document.getElementById('share-games-to-input').value = getDateKeyOffsetFromToday(30);
+
+            // ברירת מחדל: מהיום ועד ה-30 באוגוסט הקרוב (סוף עונה טיפוסי) -
+            // אם כבר עברנו את ה-30/8 השנה, קופצים ל-30/8 של השנה הבאה
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let augustEnd = new Date(today.getFullYear(), 7, 30); // חודש 7 = אוגוסט (0-מבוסס)
+            if (augustEnd < today) {
+                augustEnd = new Date(today.getFullYear() + 1, 7, 30);
+            }
+
+            document.getElementById('share-games-from-input').value = formatDateKey(today);
+            document.getElementById('share-games-to-input').value = formatDateKey(augustEnd);
+            document.getElementById('share-games-include-notes-input').checked = true;
             modal.style.display = 'flex';
         }
 
@@ -3557,6 +3568,7 @@
         function confirmShareGames() {
             const fromValue = document.getElementById('share-games-from-input').value;
             const toValue = document.getElementById('share-games-to-input').value;
+            const includeNotes = document.getElementById('share-games-include-notes-input').checked;
             if (!fromValue || !toValue) {
                 alert('נא לבחור טווח תאריכים מלא.');
                 return;
@@ -3566,7 +3578,7 @@
                 return;
             }
             closeShareGamesModal();
-            shareGamesScheduleImage(fromValue, toValue);
+            shareGamesScheduleImage(fromValue, toValue, includeNotes);
         }
 
         async function shareWeeklyScheduleImage(fromDateStr, toDateStr) {
@@ -3802,7 +3814,7 @@
         }
 
         // --- שיתוף לוז משחקים כתמונה: רשימה שטוחה של כל הפריטים המסומנים כ"זהו משחק" בטווח תאריכים ---
-        async function shareGamesScheduleImage(fromDateStr, toDateStr) {
+        async function shareGamesScheduleImage(fromDateStr, toDateStr, includeNotes = true) {
             const team = getCurrentTeam();
             if (!team) return;
 
@@ -3866,7 +3878,13 @@
             measureCtx.font = 'bold 17px Arial';
 
             games.forEach(g => {
-                g.__lines = wrapCanvasText(measureCtx, getGameLineText(g.practice), contentMaxWidth);
+                const infoLines = wrapCanvasText(measureCtx, getGameLineText(g.practice), contentMaxWidth).map(text => ({ text, isNote: false }));
+                let noteLines = [];
+                if (includeNotes && g.practice.scheduleNotes && g.practice.scheduleNotes.trim()) {
+                    const noteColor = g.practice.scheduleNotesColor || team.defaultScheduleNotesColor || teamColor;
+                    noteLines = wrapCanvasText(measureCtx, `📣 ${g.practice.scheduleNotes.trim()}`, contentMaxWidth).map(text => ({ text, isNote: true, color: noteColor }));
+                }
+                g.__lines = infoLines.concat(noteLines);
                 g.dateObj = new Date(g.dateKey + 'T00:00:00');
                 g.rowHeight = Math.max(minRowH, g.__lines.length * gameLineH + rowPadding);
             });
@@ -3939,13 +3957,13 @@
                     ctx.fillText(`${g.dateObj.getDate()}/${g.dateObj.getMonth() + 1}`, dateColX, centerY + 6);
 
                     // פרטי המשחק
-                    ctx.fillStyle = '#ffffff';
-                    ctx.font = 'bold 17px Arial';
                     ctx.textAlign = 'right';
                     const blockH = g.__lines.length * gameLineH;
                     const blockStartY = centerY - (blockH / 2) + (gameLineH / 2) + 6;
                     g.__lines.forEach((line, lineIndex) => {
-                        ctx.fillText(line, contentRightX, blockStartY + (lineIndex * gameLineH));
+                        ctx.fillStyle = line.isNote ? (line.color || teamColor) : '#ffffff';
+                        ctx.font = 'bold 17px Arial';
+                        ctx.fillText(line.text, contentRightX, blockStartY + (lineIndex * gameLineH));
                     });
 
                     y += rowH;
@@ -6543,6 +6561,10 @@
                     <label>עד תאריך:</label>
                     <input type="date" id="share-games-to-input">
                 </div>
+            </div>
+            <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:8px;">
+                <input type="checkbox" id="share-games-include-notes-input" checked style="width:18px; height:18px; cursor:pointer; flex-shrink:0;">
+                <label for="share-games-include-notes-input" style="margin:0; cursor:pointer; font-weight:normal;">📣 לכלול הערות שיופיעו בלוז</label>
             </div>
             <div class="actions-row">
                 <button class="btn" style="flex:1;" onclick="confirmShareGames()">שתף</button>
