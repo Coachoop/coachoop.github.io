@@ -1055,9 +1055,12 @@
                 <button class="court-type-btn selected" id="cal-view-month-btn" onclick="setCalendarViewMode('month')">חודשי</button>
             </div>
 
-            <div style="display:flex; gap:8px; margin-bottom:15px;">
-                <button class="btn" style="flex:1;" onclick="shareWeeklyScheduleImage()">📸 שיתוף לוז שבועי</button>
-                <button class="btn btn-secondary" style="flex:1;" onclick="shareNextWeekScheduleImage()">📤 שיתוף לוז שבוע הבא</button>
+            <div style="margin-bottom:15px;">
+                <button class="btn" style="width:100%;" onclick="toggleShareMenu()">📤 שיתוף לו"ז</button>
+                <div id="share-menu" style="display:none; gap:8px; margin-top:8px;">
+                    <button class="btn btn-secondary" style="flex:1;" onclick="openShareWeekModal()">📸 שיתוף לוז שבועי</button>
+                    <button class="btn btn-secondary" style="flex:1;" onclick="openShareGamesModal()">🏀 שיתוף לוז משחקים</button>
+                </div>
             </div>
 
             <div class="calendar-header">
@@ -1109,6 +1112,10 @@
                 <div class="form-group">
                     <label>כותרת / שם האימון או התרגיל:</label>
                     <input type="text" id="practice-title-input" placeholder="למשל: אימון בוקר / תרגיל התקפה">
+                </div>
+                <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:8px;">
+                    <input type="checkbox" id="practice-is-game-input" style="width:18px; height:18px; cursor:pointer; flex-shrink:0;">
+                    <label for="practice-is-game-input" style="margin:0; cursor:pointer; font-weight:normal;">🏀 זהו משחק (ייכלל בשיתוף "לוז משחקים")</label>
                 </div>
 
                 <div style="display: flex; gap: 10px;">
@@ -3476,38 +3483,160 @@
             return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
-        // קיצור: משתף את לו"ז השבוע הבא (7 ימים מהיום), בלי קשר לאיזה שבוע מוצג כרגע על המסך
-        function shareNextWeekScheduleImage() {
-            const nextWeekReference = new Date();
-            nextWeekReference.setDate(nextWeekReference.getDate() + 7);
-            shareWeeklyScheduleImage(nextWeekReference);
+        // --- תפריט שיתוף לו"ז: כפתור אחד שפותח שתי אפשרויות (שבועי / משחקים) ---
+        function toggleShareMenu() {
+            const menu = document.getElementById('share-menu');
+            if (!menu) return;
+            menu.style.display = (menu.style.display === 'flex') ? 'none' : 'flex';
         }
 
-        async function shareWeeklyScheduleImage(referenceDate = currentDate) {
+        function getDateKeyOffsetFromToday(days) {
+            const d = new Date();
+            d.setDate(d.getDate() + days);
+            return formatDateKey(d);
+        }
+
+        // --- מודל "שיתוף לוז שבועי": ברירת מחדל השבוע הבא (א'-ש'), אפשר לבחור כל טווח אחר ---
+        function openShareWeekModal() {
+            const modal = document.getElementById('share-week-modal');
+            if (!modal) return;
+            const nextWeekStart = getWeekStart(new Date(new Date().setDate(new Date().getDate() + 7)));
+            const nextWeekEnd = new Date(nextWeekStart);
+            nextWeekEnd.setDate(nextWeekEnd.getDate() + 6);
+            document.getElementById('share-week-from-input').value = formatDateKey(nextWeekStart);
+            document.getElementById('share-week-to-input').value = formatDateKey(nextWeekEnd);
+
+            const rangeText = `${nextWeekStart.getDate()}/${nextWeekStart.getMonth() + 1} - ${nextWeekEnd.getDate()}/${nextWeekEnd.getMonth() + 1}`;
+            document.getElementById('share-week-text-input').value = `שבוע טוב לכולם! 🏀\nהלו"ז השבועי (${rangeText}):`;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeShareWeekModal() {
+            const modal = document.getElementById('share-week-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function confirmShareWeek() {
+            const fromValue = document.getElementById('share-week-from-input').value;
+            const toValue = document.getElementById('share-week-to-input').value;
+            const customText = document.getElementById('share-week-text-input').value;
+            if (!fromValue || !toValue) {
+                alert('נא לבחור טווח תאריכים מלא.');
+                return;
+            }
+            if (toValue < fromValue) {
+                alert('תאריך "עד" לא יכול להיות לפני תאריך "מתאריך".');
+                return;
+            }
+
+            const fromParts = fromValue.split('-').map(Number);
+            const toParts = toValue.split('-').map(Number);
+            const from = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+            const to = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+            const numDays = Math.round((to - from) / (1000 * 60 * 60 * 24)) + 1;
+
+            if (numDays > 14) {
+                alert('טווח "לוז שבועי" מוגבל ל-14 יום לכל היותר, כדי שהתמונה תישאר קריאה. לטווח ארוך יותר, מומלץ להשתמש ב"שיתוף לוז משחקים" במקום.');
+                return;
+            }
+
+            closeShareWeekModal();
+            shareWeeklyScheduleImage(fromValue, toValue, customText);
+        }
+
+        // --- מודל "שיתוף לוז משחקים": טווח תאריכים, ברירת מחדל מהיום עד עוד חודש ---
+        function openShareGamesModal() {
+            const modal = document.getElementById('share-games-modal');
+            if (!modal) return;
+
+            // ברירת מחדל: מהיום ועד ה-30 באוגוסט הקרוב (סוף עונה טיפוסי) -
+            // אם כבר עברנו את ה-30/8 השנה, קופצים ל-30/8 של השנה הבאה
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            let augustEnd = new Date(today.getFullYear(), 7, 30); // חודש 7 = אוגוסט (0-מבוסס)
+            if (augustEnd < today) {
+                augustEnd = new Date(today.getFullYear() + 1, 7, 30);
+            }
+
+            document.getElementById('share-games-from-input').value = formatDateKey(today);
+            document.getElementById('share-games-to-input').value = formatDateKey(augustEnd);
+            document.getElementById('share-games-include-notes-input').checked = true;
+
+            const rangeText = `${today.getDate()}/${today.getMonth() + 1} - ${augustEnd.getDate()}/${augustEnd.getMonth() + 1}`;
+            document.getElementById('share-games-text-input').value = `לוח משחקים 🏀 (${rangeText}):`;
+
+            modal.style.display = 'flex';
+        }
+
+        function closeShareGamesModal() {
+            const modal = document.getElementById('share-games-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function confirmShareGames() {
+            const fromValue = document.getElementById('share-games-from-input').value;
+            const toValue = document.getElementById('share-games-to-input').value;
+            const includeNotes = document.getElementById('share-games-include-notes-input').checked;
+            const customText = document.getElementById('share-games-text-input').value;
+            if (!fromValue || !toValue) {
+                alert('נא לבחור טווח תאריכים מלא.');
+                return;
+            }
+            if (toValue < fromValue) {
+                alert('תאריך "עד" לא יכול להיות לפני תאריך "מתאריך".');
+                return;
+            }
+            closeShareGamesModal();
+            shareGamesScheduleImage(fromValue, toValue, includeNotes, customText);
+        }
+
+        // ממיר canvas ל-Blob באופן סינכרוני לגמרי (בניגוד ל-canvas.toBlob, שהקולבק שלו
+        // תמיד אסינכרוני). זה קריטי לשיתוף בנייד: navigator.share דורש "user activation" -
+        // טריגר טרי מלחיצת המשתמש - וכל פער אסינכרוני (כמו קולבק של toBlob) עלול לגרום
+        // לדפדפן (בעיקר כרום באנדרואיד) לאבד את זה ולדווח על canShare כ-false בשקט,
+        // גם כשהשיתוף אמור לעבוד. פונקציה זו משאירה את כל השרשרת עד ל-navigator.share
+        // סינכרונית, בלי שום await/קולבק באמצע.
+        function canvasToBlobSync(canvasEl) {
+            const dataUrl = canvasEl.toDataURL('image/png');
+            const [header, base64] = dataUrl.split(',');
+            const mimeMatch = header.match(/:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+            const binary = atob(base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return new Blob([bytes], { type: mime });
+        }
+
+        async function shareWeeklyScheduleImage(fromDateStr, toDateStr, customText) {
             const team = getCurrentTeam();
             if (!team) return;
 
             logAppEvent('share_weekly_schedule', { team_id: team.id || null });
 
             const teamColor = getTeamColor(team);
-            const weekStart = getWeekStart(referenceDate);
+            const fromParts = fromDateStr.split('-').map(Number);
+            const toParts = toDateStr.split('-').map(Number);
+            const rangeStart = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+            const rangeEnd = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+            const numDays = Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24)) + 1;
 
             const days = [];
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(weekStart);
+            for (let i = 0; i < numDays; i++) {
+                const d = new Date(rangeStart);
                 d.setDate(d.getDate() + i);
                 const dateKey = formatDateKey(d);
                 days.push({
                     date: d,
                     dateKey,
-                    weekdayName: HEBREW_WEEKDAYS_FULL[i],
+                    weekdayName: HEBREW_WEEKDAYS_FULL[d.getDay()],
                     practices: getEffectivePracticesForDate(team, dateKey).slice().sort((a, b) => (a.time || '').localeCompare(b.time || '')),
                     holiday: getHolidayInfo(team, dateKey)
                 });
             }
 
-            const weekEnd = days[6].date;
-            const rangeText = `${weekStart.getDate()}/${weekStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`;
+            const weekEnd = days[days.length - 1].date;
+            const rangeText = `${rangeStart.getDate()}/${rangeStart.getMonth() + 1} - ${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`;
 
             function getPracticeLineText(p) {
                 return `${p.title || 'אימון'}  •  ${formatTimeRange(p)}${p.location ? '  •  ' + p.location : ''}`;
@@ -3673,42 +3802,250 @@
             ctx.textAlign = 'center';
             ctx.fillText('נוצר באמצעות coachoop.com 🏀', width / 2, height - 20);
 
-            // --- המרה לתמונה ושיתוף ---
-            canvas.toBlob(async (blob) => {
-                if (!blob) {
-                    alert('שגיאה ביצירת התמונה. נסה שוב.');
-                    return;
-                }
+            // --- המרה לתמונה ושיתוף (סינכרוני עד ל-navigator.share - ראו canvasToBlobSync) ---
+            const blob = canvasToBlobSync(canvas);
+            if (!blob) {
+                alert('שגיאה ביצירת התמונה. נסה שוב.');
+                return;
+            }
 
-                const fileName = `לוז-${team.name}-${rangeText.replace(/\//g, '-')}.png`;
-                const file = new File([blob], fileName, { type: 'image/png' });
-                const shareText = `שבוע טוב לכולם! 🏀\nהלו"ז השבועי (\u202D${rangeText}\u202C):`;
+            const fileName = `לוז-${team.name}-${rangeText.replace(/\//g, '-')}.png`;
+            const file = new File([blob], fileName, { type: 'image/png' });
+            const shareText = customText || `שבוע טוב לכולם! 🏀\nהלו"ז השבועי (\u202D${rangeText}\u202C):`;
 
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                    try {
-                        await navigator.share({
-                            files: [file],
-                            title: `לוז שבועי - ${team.name}`,
-                            text: shareText
-                        });
-                    } catch (err) {
-                        if (err.name !== 'AbortError') {
-                            console.error('שגיאת שיתוף:', err);
-                        }
+            const hasShareApi = !!navigator.share;
+            const hasCanShareApi = !!navigator.canShare;
+            const canShareResult = hasCanShareApi ? navigator.canShare({ files: [file] }) : null;
+
+            if (hasCanShareApi && canShareResult) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: `לוז שבועי - ${team.name}`,
+                        text: shareText
+                    });
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('שגיאת שיתוף:', err);
+                        alert(`שגיאה בשיתוף: ${err.name} - ${err.message}`);
                     }
-                } else {
-                    // דפדפן ללא תמיכה בשיתוף קבצים - מוריד את התמונה במקום
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = fileName;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
-                    alert('הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.');
                 }
-            }, 'image/png');
+            } else {
+                // דפדפן ללא תמיכה בשיתוף קבצים - מוריד את התמונה במקום
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                alert(`הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.\n\n(מידע טכני לצורך דיווח באג: navigator.share=${hasShareApi}, navigator.canShare=${hasCanShareApi}, תוצאת canShare=${canShareResult})`);
+            }
+        }
+
+        // --- שיתוף לוז משחקים כתמונה: רשימה שטוחה של כל הפריטים המסומנים כ"זהו משחק" בטווח תאריכים ---
+        async function shareGamesScheduleImage(fromDateStr, toDateStr, includeNotes = true, customText) {
+            const team = getCurrentTeam();
+            if (!team) return;
+
+            logAppEvent('share_games_schedule', { team_id: team.id || null });
+
+            const teamColor = getTeamColor(team);
+
+            const games = [];
+            Object.keys(team.practices || {}).forEach(dateKey => {
+                if (dateKey < fromDateStr || dateKey > toDateStr) return;
+                const list = getEffectivePracticesForDate(team, dateKey);
+                list.forEach(p => {
+                    if (p.isGame) games.push({ dateKey, practice: p });
+                });
+            });
+
+            games.sort((a, b) => {
+                if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+                return (a.practice.time || '').localeCompare(b.practice.time || '');
+            });
+
+            const fromParts = fromDateStr.split('-').map(Number);
+            const toParts = toDateStr.split('-').map(Number);
+            const fromDate = new Date(fromParts[0], fromParts[1] - 1, fromParts[2]);
+            const toDate = new Date(toParts[0], toParts[1] - 1, toParts[2]);
+            const rangeText = `${fromDate.getDate()}/${fromDate.getMonth() + 1} - ${toDate.getDate()}/${toDate.getMonth() + 1}`;
+
+            function getGameLineText(p) {
+                return `${p.title || 'משחק'}  •  ${formatTimeRange(p)}${p.location ? '  •  ' + p.location : ''}`;
+            }
+
+            function wrapCanvasText(measureCtx, text, maxWidth) {
+                const words = text.split(' ');
+                const lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    const testLine = currentLine ? currentLine + ' ' + word : word;
+                    if (measureCtx.measureText(testLine).width > maxWidth && currentLine) {
+                        lines.push(currentLine);
+                        currentLine = word;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                if (currentLine) lines.push(currentLine);
+                return lines.length ? lines : [''];
+            }
+
+            const width = 800;
+            const headerHeight = 220;
+            const footerHeight = 50;
+            const gameLineH = 30;
+            const minRowH = 62;
+            const rowPadding = 18;
+            const dateColX = width - 35;
+            const contentRightX = width - 150;
+            const contentMaxWidth = contentRightX - 100;
+
+            const measureCanvas = document.createElement('canvas');
+            const measureCtx = measureCanvas.getContext('2d');
+            measureCtx.font = 'bold 17px Arial';
+
+            games.forEach(g => {
+                const infoLines = wrapCanvasText(measureCtx, getGameLineText(g.practice), contentMaxWidth).map(text => ({ text, isNote: false }));
+                let noteLines = [];
+                if (includeNotes && g.practice.scheduleNotes && g.practice.scheduleNotes.trim()) {
+                    const noteColor = g.practice.scheduleNotesColor || team.defaultScheduleNotesColor || teamColor;
+                    noteLines = wrapCanvasText(measureCtx, `📣 ${g.practice.scheduleNotes.trim()}`, contentMaxWidth).map(text => ({ text, isNote: true, color: noteColor }));
+                }
+                g.__lines = infoLines.concat(noteLines);
+                g.dateObj = new Date(g.dateKey + 'T00:00:00');
+                g.rowHeight = Math.max(minRowH, g.__lines.length * gameLineH + rowPadding);
+            });
+
+            const totalRowsHeight = games.length > 0 ? games.reduce((sum, g) => sum + g.rowHeight, 0) : minRowH;
+            const height = headerHeight + totalRowsHeight + footerHeight;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.direction = 'rtl';
+
+            // רקע כללי
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, width, height);
+
+            // פס עליון בצבע הקבוצה
+            ctx.fillStyle = teamColor;
+            ctx.fillRect(0, 0, width, 10);
+
+            // כותרת - שם קבוצה
+            ctx.fillStyle = teamColor;
+            ctx.font = 'bold 40px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText(`🏀 ${team.name}`, width / 2, 65);
+
+            // כותרת משנה
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 26px Arial';
+            ctx.fillText('לוז משחקים', width / 2, 105);
+
+            // טווח תאריכים
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '20px Arial';
+            ctx.fillText(`טווח: \u202D${rangeText}\u202C`, width / 2, 140);
+
+            // קו הפרדה
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(40, headerHeight - 20);
+            ctx.lineTo(width - 40, headerHeight - 20);
+            ctx.stroke();
+
+            // שורות המשחקים
+            let y = headerHeight;
+
+            if (games.length === 0) {
+                ctx.fillStyle = '#475569';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('אין משחקים מוגדרים בטווח התאריכים הזה', width / 2, y + minRowH / 2 + 6);
+                y += minRowH;
+            } else {
+                games.forEach((g, index) => {
+                    const rowH = g.rowHeight;
+                    const isEven = index % 2 === 0;
+                    const rowBoxH = rowH - 8;
+                    const centerY = y + rowBoxH / 2;
+
+                    ctx.fillStyle = isEven ? '#1e293b' : '#0f172a';
+                    ctx.fillRect(30, y, width - 60, rowBoxH);
+
+                    // תאריך
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.textAlign = 'right';
+                    ctx.fillText(`${g.dateObj.getDate()}/${g.dateObj.getMonth() + 1}`, dateColX, centerY + 6);
+
+                    // פרטי המשחק
+                    ctx.textAlign = 'right';
+                    const blockH = g.__lines.length * gameLineH;
+                    const blockStartY = centerY - (blockH / 2) + (gameLineH / 2) + 6;
+                    g.__lines.forEach((line, lineIndex) => {
+                        ctx.fillStyle = line.isNote ? (line.color || teamColor) : '#ffffff';
+                        ctx.font = 'bold 17px Arial';
+                        ctx.fillText(line.text, contentRightX, blockStartY + (lineIndex * gameLineH));
+                    });
+
+                    y += rowH;
+                });
+            }
+
+            // פוטר
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '15px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('נוצר באמצעות coachoop.com 🏀', width / 2, height - 20);
+
+            // --- המרה לתמונה ושיתוף (סינכרוני עד ל-navigator.share - ראו canvasToBlobSync) ---
+            const blob = canvasToBlobSync(canvas);
+            if (!blob) {
+                alert('שגיאה ביצירת התמונה. נסה שוב.');
+                return;
+            }
+
+            const fileName = `משחקים-${team.name}-${rangeText.replace(/\//g, '-')}.png`;
+            const file = new File([blob], fileName, { type: 'image/png' });
+            const shareText = customText || `לוח משחקים 🏀 (\u202D${rangeText}\u202C):`;
+
+            const hasShareApi = !!navigator.share;
+            const hasCanShareApi = !!navigator.canShare;
+            const canShareResult = hasCanShareApi ? navigator.canShare({ files: [file] }) : null;
+
+            if (hasCanShareApi && canShareResult) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: `לוז משחקים - ${team.name}`,
+                        text: shareText
+                    });
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('שגיאת שיתוף:', err);
+                        alert(`שגיאה בשיתוף: ${err.name} - ${err.message}`);
+                    }
+                }
+            } else {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                alert(`הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.\n\n(מידע טכני לצורך דיווח באג: navigator.share=${hasShareApi}, navigator.canShare=${hasCanShareApi}, תוצאת canShare=${canShareResult})`);
+            }
         }
 
         // --- לוח שנה כללי (כל הקבוצות, לפי צבע קבוצה) ---
@@ -4304,6 +4641,7 @@
 
             document.getElementById('practice-edit-title').innerText = `עריכת תרגיל לתאריך ${selectedPracticeDateStr}`;
             document.getElementById('practice-title-input').value = practice.title || '';
+            document.getElementById('practice-is-game-input').checked = !!practice.isGame;
             document.getElementById('practice-time-input').value = practice.time || '';
             document.getElementById('practice-endtime-input').value = practice.endTime || '';
             document.getElementById('practice-location-input').value = practice.location || '';
@@ -4875,6 +5213,7 @@
             }
 
             practice.title = document.getElementById('practice-title-input').value.trim() || 'אימון';
+            practice.isGame = document.getElementById('practice-is-game-input').checked;
             practice.time = newTime;
             practice.endTime = newEndTime;
             practice.location = document.getElementById('practice-location-input').value.trim();
@@ -6214,6 +6553,66 @@
             <input type="text" id="bank-picker-search" placeholder="🔍 חפש לפי שם או תגית..." oninput="renderBankPickerList()" style="margin-bottom:10px;">
             <div id="bank-picker-list" style="overflow-y:auto; flex:1;"></div>
             <button class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="closeBankPickerModal()">ביטול</button>
+        </div>
+    </div>
+    <!-- ========================================== -->
+    <!-- מודל בחירת שבוע לשיתוף לוז שבועי -->
+    <!-- ========================================== -->
+    <div id="share-week-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:400px; width:100%;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">📸 שיתוף לוז שבועי</h3>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>מתאריך:</label>
+                    <input type="date" id="share-week-from-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>עד תאריך:</label>
+                    <input type="date" id="share-week-to-input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>טקסט הודעה מלווה (בוואטסאפ):</label>
+                <textarea id="share-week-text-input" style="min-height:60px;"></textarea>
+            </div>
+            <div class="actions-row">
+                <button class="btn" style="flex:1;" onclick="confirmShareWeek()">שתף</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="closeShareWeekModal()">ביטול</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- מודל בחירת טווח תאריכים לשיתוף לוז משחקים -->
+    <!-- ========================================== -->
+    <div id="share-games-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:400px; width:100%;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">🏀 שיתוף לוז משחקים</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">
+                יכללו רק פריטים שסומנו כ"זהו משחק" בטופס עריכת האימון/משחק, בטווח התאריכים שתבחר.
+            </p>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                    <label>מתאריך:</label>
+                    <input type="date" id="share-games-from-input">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label>עד תאריך:</label>
+                    <input type="date" id="share-games-to-input">
+                </div>
+            </div>
+            <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:8px;">
+                <input type="checkbox" id="share-games-include-notes-input" checked style="width:18px; height:18px; cursor:pointer; flex-shrink:0;">
+                <label for="share-games-include-notes-input" style="margin:0; cursor:pointer; font-weight:normal;">📣 לכלול הערות שיופיעו בלוז</label>
+            </div>
+            <div class="form-group">
+                <label>טקסט הודעה מלווה (בוואטסאפ):</label>
+                <textarea id="share-games-text-input" style="min-height:60px;"></textarea>
+            </div>
+            <div class="actions-row">
+                <button class="btn" style="flex:1;" onclick="confirmShareGames()">שתף</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="closeShareGamesModal()">ביטול</button>
+            </div>
         </div>
     </div>
 
