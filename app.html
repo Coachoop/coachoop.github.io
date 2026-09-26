@@ -728,6 +728,7 @@
                     <button id="admin-feedback-menu-item" style="display:none;" onclick="openAdminFeedbackFromBell(); closeHamburgerMenu()">
                         🔔 פניות שהתקבלו <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
                     </button>
+                    <button id="admin-panel-menu-item" style="display:none;" onclick="openAdminPanel(); closeHamburgerMenu()">🛡️ מנהל</button>
 
                     <div id="admin-teams-filter-menu" style="display:none;">
                         <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
@@ -786,6 +787,48 @@
                     התחבר / הירשם עם Google
                 </button>
             </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- מסך חסימה - משתמש ללא רישיון פעיל -->
+        <!-- ========================================== -->
+        <div id="view-license-blocked" class="view">
+            <div class="card" style="text-align:center; margin-top:40px;">
+                <div style="font-size:3rem; margin-bottom:10px;">🔒</div>
+                <h2 style="color:var(--danger);">הגישה שלך למערכת מוגבלת</h2>
+                <p style="color:var(--text-muted); margin-top:12px;">
+                    הרישיון שלך אינו פעיל כרגע, ולכן לא ניתן להיכנס למערכת.<br>
+                    לחידוש הגישה, לחץ על הכפתור למטה - הבקשה תישלח ישירות למנהל המערכת.
+                </p>
+                <button id="license-renewal-btn" class="btn" style="margin-top:20px;" onclick="sendLicenseRenewalRequest()">📩 שלח בקשת חידוש למנהל</button>
+                <p id="license-renewal-sent-msg" style="display:none; color:#4ade80; margin-top:14px; font-weight:bold;">✅ הבקשה נשלחה! נחזור אליך בהקדם.</p>
+                <button class="btn btn-secondary" style="margin-top:14px; width:100%;" onclick="handleLogout()">התנתק</button>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- מסך מנהל: קבוצות + טבלת הרשאות -->
+        <!-- ========================================== -->
+        <div id="view-admin-panel" class="view">
+            <h2>🛡️ מנהל</h2>
+            <div class="actions-row" style="margin-bottom:15px;">
+                <button id="admin-panel-tab-teams-btn" class="btn" style="flex:1;" onclick="switchAdminPanelTab('teams')">📋 קבוצות</button>
+                <button id="admin-panel-tab-permissions-btn" class="btn btn-secondary" style="flex:1;" onclick="switchAdminPanelTab('permissions')">🔑 הרשאות</button>
+            </div>
+
+            <div id="admin-panel-tab-teams-content">
+                <div id="admin-panel-teams-list"></div>
+            </div>
+
+            <div id="admin-panel-tab-permissions-content" style="display:none;">
+                <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">
+                    Standard / Pro נותנים גישה מלאה למערכת (כרגע ללא הבדל פונקציונלי ביניהם - הכנה לעתיד).
+                    "No license" חוסם את המשתמש מכניסה למערכת עד לחידוש.
+                </p>
+                <div id="admin-panel-permissions-list"></div>
+            </div>
+
+            <button class="btn btn-secondary" style="width:100%; margin-top:20px;" onclick="showView('view-teams-list')">↩️ חזרה</button>
         </div>
 
         <!-- ========================================== -->
@@ -1445,6 +1488,15 @@
 
         let currentUser = null;
         let currentUserRole = 'coach';
+        // הבעלים האמיתי של המערכת - קבוע בקוד (לא ניתן לעריכה מה-UI), כך שאף admin
+        // אחר לא יכול להסיר/להגביל את הגישה של הבעלים, גם לא דרך טבלת ההרשאות.
+        const OWNER_EMAIL = 'haim.binyamini@gmail.com';
+        function isOwner() {
+            return !!currentUser && currentUser.email === OWNER_EMAIL;
+        }
+        // רישיון המשתמש: 'standard' / 'pro' - גישה מלאה (כרגע אין הבדל פונקציונלי ביניהם,
+        // הכנה לעתיד). 'none' - המשתמש חסום מכניסה למערכת עד לחידוש מול המנהל.
+        let currentUserPlan = 'standard';
         // תזכורות "הכן אימון" שהמאמן הגדיר לעצמו - מערך של מספרי דקות-לפני-האימון.
         // כבוי כברירת מחדל (מערך ריק) - כל מאמן מפעיל בעצמו אם רוצה
         let currentUserPrepReminders = [];
@@ -2215,20 +2267,29 @@
                 await userRef.set({
                     email: currentUser.email,
                     role: 'coach',
+                    plan: 'standard',
                     createdAt: Date.now(),
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                     sessionCount: 1,
                     prepReminders: []
                 });
                 currentUserRole = 'coach';
+                currentUserPlan = 'standard';
                 currentUserPrepReminders = [];
             } else {
                 currentUserRole = snap.data().role || 'coach';
+                currentUserPlan = snap.data().plan || 'standard';
                 currentUserPrepReminders = snap.data().prepReminders || [];
                 userRef.update({
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                     sessionCount: firebase.firestore.FieldValue.increment(1)
                 }).catch(e => console.warn('שגיאה בעדכון lastActive:', e));
+            }
+
+            // הבעלים תמיד עם גישה מלאה, בלי קשר למה ששמור בשדה plan
+            if (currentUserPlan === 'none' && !isOwner()) {
+                showLicenseBlockedScreen();
+                return;
             }
 
             document.getElementById('user-email-badge').innerText = currentUser.email;
@@ -2237,6 +2298,7 @@
             document.getElementById('admin-teams-filter-menu').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
             document.getElementById('admin-feedback-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
+            document.getElementById('admin-panel-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
             if (currentUserRole === 'admin') {
                 document.getElementById('admin-filter-mine-check').style.display = adminTeamsFilter === 'mine' ? 'inline' : 'none';
                 document.getElementById('admin-filter-all-check').style.display = adminTeamsFilter === 'all' ? 'inline' : 'none';
@@ -2246,6 +2308,34 @@
             subscribeToDrillBank();
             subscribeToFeedbackNotifications();
             showView('view-teams-list');
+        }
+
+        // --- מסך חסימה למשתמש ללא רישיון פעיל ---
+        function showLicenseBlockedScreen() {
+            document.getElementById('user-email-badge').innerText = currentUser.email;
+            document.getElementById('header-user-info').style.display = 'flex';
+            showView('view-license-blocked');
+        }
+
+        async function sendLicenseRenewalRequest() {
+            const btn = document.getElementById('license-renewal-btn');
+            btn.disabled = true;
+            try {
+                await db.collection('feedback').add({
+                    uid: currentUser ? currentUser.uid : null,
+                    email: currentUser ? currentUser.email : null,
+                    message: `🔒 בקשת חידוש רישיון: המשתמש ${currentUser.email} מנסה להיכנס למערכת אך הרישיון שלו אינו פעיל ("No license"). נא לבדוק ולחדש גישה.`,
+                    read: false,
+                    status: 'open',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                document.getElementById('license-renewal-sent-msg').style.display = 'block';
+                btn.style.display = 'none';
+            } catch (e) {
+                console.warn('שגיאה בשליחת בקשת חידוש:', e);
+                alert('משהו השתבש בשליחת הבקשה. אפשר גם לפנות ישירות למייל: ' + OWNER_EMAIL);
+                btn.disabled = false;
+            }
         }
 
         function openFeedbackModal() {
@@ -2401,6 +2491,106 @@
         function openAdminFeedbackFromBell() {
             showView('view-account-settings');
             loadAdminFeedback();
+        }
+
+        // --- מסך מנהל: קבוצות + טבלת הרשאות ---
+        function openAdminPanel() {
+            if (currentUserRole !== 'admin') return;
+            switchAdminPanelTab('teams');
+            showView('view-admin-panel');
+        }
+
+        function switchAdminPanelTab(tab) {
+            const teamsBtn = document.getElementById('admin-panel-tab-teams-btn');
+            const permBtn = document.getElementById('admin-panel-tab-permissions-btn');
+            const teamsContent = document.getElementById('admin-panel-tab-teams-content');
+            const permContent = document.getElementById('admin-panel-tab-permissions-content');
+
+            if (tab === 'teams') {
+                teamsBtn.classList.remove('btn-secondary');
+                permBtn.classList.add('btn-secondary');
+                teamsContent.style.display = 'block';
+                permContent.style.display = 'none';
+                renderAdminPanelTeamsList();
+            } else {
+                permBtn.classList.remove('btn-secondary');
+                teamsBtn.classList.add('btn-secondary');
+                teamsContent.style.display = 'none';
+                permContent.style.display = 'block';
+                renderAdminPanelPermissionsList();
+            }
+        }
+
+        async function renderAdminPanelTeamsList() {
+            const container = document.getElementById('admin-panel-teams-list');
+            container.innerHTML = '<p style="color:var(--text-muted);">טוען...</p>';
+            try {
+                const snap = await db.collection('teams').get();
+                if (snap.empty) {
+                    container.innerHTML = '<p style="color:var(--text-muted);">אין קבוצות במערכת.</p>';
+                    return;
+                }
+                const teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                teams.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
+                container.innerHTML = teams.map(t => `
+                    <div class="note-card">
+                        <strong style="overflow-wrap:break-word;">${escapeHtml(t.name || 'ללא שם')}</strong>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px; overflow-wrap:break-word;">בעלים: ${escapeHtml(t.ownerEmail || t.ownerId || 'לא ידוע')}</p>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error('שגיאה בטעינת רשימת קבוצות:', e);
+                container.innerHTML = '<p style="color:var(--danger);">שגיאה בטעינת הקבוצות.</p>';
+            }
+        }
+
+        async function renderAdminPanelPermissionsList() {
+            const container = document.getElementById('admin-panel-permissions-list');
+            container.innerHTML = '<p style="color:var(--text-muted);">טוען...</p>';
+            try {
+                const snap = await db.collection('users').get();
+                if (snap.empty) {
+                    container.innerHTML = '<p style="color:var(--text-muted);">אין משתמשים במערכת.</p>';
+                    return;
+                }
+                const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                users.sort((a, b) => (a.email || '').localeCompare(b.email || '', 'he'));
+
+                container.innerHTML = users.map(u => {
+                    if (u.email === OWNER_EMAIL) {
+                        return `
+                            <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                                <strong style="overflow-wrap:break-word;">${escapeHtml(u.email || u.id)}</strong>
+                                <span style="background:var(--primary); color:white; padding:4px 10px; border-radius:6px; font-size:0.8rem; font-weight:bold; flex-shrink:0;">👑 בעלים</span>
+                            </div>
+                        `;
+                    }
+                    const plan = u.plan || 'standard';
+                    return `
+                        <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <strong style="overflow-wrap:break-word;">${escapeHtml(u.email || u.id)}</strong>
+                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                <button class="btn ${plan === 'standard' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'standard')">Standard</button>
+                                <button class="btn ${plan === 'pro' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'pro')">Pro</button>
+                                <button class="btn ${plan === 'none' ? 'btn-danger' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'none')">No license</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error('שגיאה בטעינת משתמשים:', e);
+                container.innerHTML = '<p style="color:var(--danger);">שגיאה בטעינת המשתמשים.</p>';
+            }
+        }
+
+        async function setUserPlan(userId, plan) {
+            try {
+                await db.collection('users').doc(userId).set({ plan: plan }, { merge: true });
+                renderAdminPanelPermissionsList();
+            } catch (e) {
+                console.error('שגיאה בעדכון רישיון:', e);
+                alert('שגיאה בעדכון הרישיון. ייתכן שזה חסום ע"י חוקי ההרשאות ב-Firestore - ודא שהדבקת את החוקים המעודכנים.');
+            }
         }
 
         // --- לוח ניהול (מנהל בלבד): צפייה בהצעות ומשוב שהתקבלו ---
@@ -2601,7 +2791,7 @@
 
         let viewHistory = [];
         let isNavigatingBack = false;
-        const NO_BACK_VIEWS = ['view-auth', 'view-teams-list'];
+        const NO_BACK_VIEWS = ['view-auth', 'view-teams-list', 'view-license-blocked'];
 
         function showView(viewId) {
             const currentActive = document.querySelector('.view.active');
