@@ -812,7 +812,7 @@
         <div id="view-admin-panel" class="view">
             <h2>🛡️ מנהל</h2>
             <div class="actions-row" style="margin-bottom:15px;">
-                <button id="admin-panel-tab-teams-btn" class="btn" style="flex:1;" onclick="switchAdminPanelTab('teams')">📋 קבוצות</button>
+                <button id="admin-panel-tab-teams-btn" class="btn" style="flex:1;" onclick="switchAdminPanelTab('teams')">📊 סקירה</button>
                 <button id="admin-panel-tab-permissions-btn" class="btn btn-secondary" style="flex:1;" onclick="switchAdminPanelTab('permissions')">🔑 הרשאות</button>
             </div>
 
@@ -2530,17 +2530,35 @@
                     container.innerHTML = '<p style="color:var(--text-muted);">אין קבוצות במערכת.</p>';
                     return;
                 }
-                const teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                teams.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
-                container.innerHTML = teams.map(t => `
-                    <div class="note-card">
-                        <strong style="overflow-wrap:break-word;">${escapeHtml(t.name || 'ללא שם')}</strong>
-                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:4px; overflow-wrap:break-word;">בעלים: ${escapeHtml(t.ownerEmail || t.ownerId || 'לא ידוע')}</p>
+                const teams = snap.docs.map(d => d.data());
+                const byUser = {};
+                teams.forEach(t => {
+                    const email = t.ownerEmail || t.ownerId || 'לא ידוע';
+                    if (!byUser[email]) byUser[email] = { teamCount: 0, playerCount: 0 };
+                    byUser[email].teamCount += 1;
+                    byUser[email].playerCount += Array.isArray(t.players) ? t.players.length : 0;
+                });
+                const emails = Object.keys(byUser).sort((a, b) => a.localeCompare(b, 'he'));
+
+                const headerRow = `
+                    <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; color:var(--text-muted); font-size:0.8rem; font-weight:bold;">
+                        <span>משתמש</span>
+                        <span style="display:flex; gap:22px; flex-shrink:0;"><span>קבוצות</span><span>שחקנים</span></span>
+                    </div>
+                `;
+
+                container.innerHTML = headerRow + emails.map(email => `
+                    <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <strong style="overflow-wrap:break-word;">${escapeHtml(email)}</strong>
+                        <span style="display:flex; gap:22px; flex-shrink:0; font-size:0.95rem;">
+                            <span>${byUser[email].teamCount}</span>
+                            <span>${byUser[email].playerCount}</span>
+                        </span>
                     </div>
                 `).join('');
             } catch (e) {
-                console.error('שגיאה בטעינת רשימת קבוצות:', e);
-                container.innerHTML = '<p style="color:var(--danger);">שגיאה בטעינת הקבוצות.</p>';
+                console.error('שגיאה בטעינת נתוני משתמשים:', e);
+                container.innerHTML = '<p style="color:var(--danger);">שגיאה בטעינת הנתונים.</p>';
             }
         }
 
@@ -2554,7 +2572,12 @@
                     return;
                 }
                 const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                users.sort((a, b) => (a.email || '').localeCompare(b.email || '', 'he'));
+                // הבעלים תמיד ראשון ברשימה, שאר המשתמשים ממוינים לפי אימייל
+                users.sort((a, b) => {
+                    if (a.email === OWNER_EMAIL) return -1;
+                    if (b.email === OWNER_EMAIL) return 1;
+                    return (a.email || '').localeCompare(b.email || '', 'he');
+                });
 
                 container.innerHTML = users.map(u => {
                     if (u.email === OWNER_EMAIL) {
@@ -2566,13 +2589,24 @@
                         `;
                     }
                     const plan = u.plan || 'standard';
+                    const role = u.role || 'coach';
                     return `
-                        <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <div class="note-card">
                             <strong style="overflow-wrap:break-word;">${escapeHtml(u.email || u.id)}</strong>
-                            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                                <button class="btn ${plan === 'standard' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'standard')">Standard</button>
-                                <button class="btn ${plan === 'pro' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'pro')">Pro</button>
-                                <button class="btn ${plan === 'none' ? 'btn-danger' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'none')">No license</button>
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                                <span style="font-size:0.8rem; color:var(--text-muted); flex-shrink:0;">תפקיד:</span>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button class="btn ${role === 'coach' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserRole('${u.id}', 'coach')">👤 מאמן</button>
+                                    <button class="btn ${role === 'admin' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserRole('${u.id}', 'admin')">🛡️ מנהל</button>
+                                </div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                                <span style="font-size:0.8rem; color:var(--text-muted); flex-shrink:0;">רישיון:</span>
+                                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                    <button class="btn ${plan === 'standard' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'standard')">Standard</button>
+                                    <button class="btn ${plan === 'pro' ? '' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'pro')">Pro</button>
+                                    <button class="btn ${plan === 'none' ? 'btn-danger' : 'btn-secondary'}" style="padding:6px 10px; font-size:0.8rem;" onclick="setUserPlan('${u.id}', 'none')">No license</button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -2580,6 +2614,16 @@
             } catch (e) {
                 console.error('שגיאה בטעינת משתמשים:', e);
                 container.innerHTML = '<p style="color:var(--danger);">שגיאה בטעינת המשתמשים.</p>';
+            }
+        }
+
+        async function setUserRole(userId, role) {
+            try {
+                await db.collection('users').doc(userId).set({ role: role }, { merge: true });
+                renderAdminPanelPermissionsList();
+            } catch (e) {
+                console.error('שגיאה בעדכון תפקיד:', e);
+                alert('שגיאה בעדכון התפקיד. ייתכן שזה חסום ע"י חוקי ההרשאות ב-Firestore - ודא שהדבקת את החוקים המעודכנים.');
             }
         }
 
