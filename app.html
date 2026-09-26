@@ -3813,7 +3813,11 @@
             const file = new File([blob], fileName, { type: 'image/png' });
             const shareText = customText || `שבוע טוב לכולם! 🏀\nהלו"ז השבועי (\u202D${rangeText}\u202C):`;
 
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            const hasShareApi = !!navigator.share;
+            const hasCanShareApi = !!navigator.canShare;
+            const canShareResult = hasCanShareApi ? navigator.canShare({ files: [file] }) : null;
+
+            if (hasCanShareApi && canShareResult) {
                 try {
                     await navigator.share({
                         files: [file],
@@ -3823,6 +3827,7 @@
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.error('שגיאת שיתוף:', err);
+                        alert(`שגיאה בשיתוף: ${err.name} - ${err.message}`);
                     }
                 }
             } else {
@@ -3835,7 +3840,7 @@
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-                alert('הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.');
+                alert(`הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.\n\n(מידע טכני לצורך דיווח באג: navigator.share=${hasShareApi}, navigator.canShare=${hasCanShareApi}, תוצאת canShare=${canShareResult})`);
             }
         }
 
@@ -4013,7 +4018,11 @@
             const file = new File([blob], fileName, { type: 'image/png' });
             const shareText = customText || `לוח משחקים 🏀 (\u202D${rangeText}\u202C):`;
 
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            const hasShareApi = !!navigator.share;
+            const hasCanShareApi = !!navigator.canShare;
+            const canShareResult = hasCanShareApi ? navigator.canShare({ files: [file] }) : null;
+
+            if (hasCanShareApi && canShareResult) {
                 try {
                     await navigator.share({
                         files: [file],
@@ -4023,6 +4032,7 @@
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.error('שגיאת שיתוף:', err);
+                        alert(`שגיאה בשיתוף: ${err.name} - ${err.message}`);
                     }
                 }
             } else {
@@ -4034,7 +4044,7 @@
                 link.click();
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
-                alert('הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.');
+                alert(`הדפדפן שלך לא תומך בשיתוף ישיר - התמונה הורדה למכשיר, אפשר לצרף אותה ידנית.\n\n(מידע טכני לצורך דיווח באג: navigator.share=${hasShareApi}, navigator.canShare=${hasCanShareApi}, תוצאת canShare=${canShareResult})`);
             }
         }
 
