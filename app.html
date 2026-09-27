@@ -725,16 +725,14 @@
                     <button onclick="openInviteModal(); closeHamburgerMenu()">📨 שלח אפליקציה למאמנ/ת</button>
                     <button onclick="showView('view-drill-bank'); closeHamburgerMenu()">📚 בנק תרגילים</button>
                     <button onclick="openFeedbackModal(); closeHamburgerMenu()">💡 הצעות ומשוב / צור קשר</button>
-                    <button id="admin-feedback-menu-item" style="display:none;" onclick="openAdminFeedbackFromBell(); closeHamburgerMenu()">
-                        🔔 פניות שהתקבלו <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
+                    <button id="admin-panel-menu-item" style="display:none; position:relative;" onclick="toggleAdminMenu()">
+                        🛡️ מנהל <span id="admin-feedback-badge" class="hamburger-badge" style="display:none;">0</span>
                     </button>
-                    <button id="admin-panel-menu-item" style="display:none;" onclick="openAdminPanel(); closeHamburgerMenu()">🛡️ מנהל</button>
-
-                    <div id="admin-teams-filter-menu" style="display:none;">
-                        <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
-                        <p style="font-size:0.75rem; color:var(--text-muted); padding:6px 14px 2px;">🛡️ תצוגת מנהל</p>
-                        <button id="admin-filter-mine-btn" onclick="setAdminTeamsFilter('mine')">📋 רק הקבוצות שלי <span id="admin-filter-mine-check" style="display:none;">✓</span></button>
-                        <button id="admin-filter-all-btn" onclick="setAdminTeamsFilter('all')">🌐 כל הקבוצות במערכת <span id="admin-filter-all-check" style="display:none;">✓</span></button>
+                    <div id="admin-submenu" style="display:none; flex-direction:column; gap:2px; padding-right:10px; border-right:2px solid var(--border-color); margin-right:8px;">
+                        <button onclick="openAdminPanel('teams'); closeHamburgerMenu()">📊 סקירה</button>
+                        <button onclick="openAdminPanel('permissions'); closeHamburgerMenu()">🔑 הרשאות</button>
+                        <button onclick="openAdminPanel('feedback'); closeHamburgerMenu()">🔔 פניות שהתקבלו</button>
+                        <button onclick="setAdminTeamsFilter('all'); showView('view-teams-list'); closeHamburgerMenu()">🌐 כל הקבוצות במערכת</button>
                     </div>
 
                     <hr style="border-color: var(--border-color); width:100%; margin:4px 0;">
@@ -847,6 +845,7 @@
             <div class="actions-row" style="margin-bottom:15px;">
                 <button id="admin-panel-tab-teams-btn" class="btn" style="flex:1;" onclick="switchAdminPanelTab('teams')">📊 סקירה</button>
                 <button id="admin-panel-tab-permissions-btn" class="btn btn-secondary" style="flex:1;" onclick="switchAdminPanelTab('permissions')">🔑 הרשאות</button>
+                <button id="admin-panel-tab-feedback-btn" class="btn btn-secondary" style="flex:1;" onclick="switchAdminPanelTab('feedback')">🔔 פניות</button>
             </div>
 
             <div id="admin-panel-tab-teams-content">
@@ -859,6 +858,28 @@
                     "No license" חוסם את המשתמש מכניסה למערכת עד לחידוש.
                 </p>
                 <div id="admin-panel-permissions-list"></div>
+            </div>
+
+            <div id="admin-panel-tab-feedback-content" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                    <strong>💡 הצעות ומשוב שהתקבלו</strong>
+                    <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="loadAdminFeedback()">🔄 רענן</button>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
+                    <button class="court-type-btn selected" id="feedback-filter-all-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('all')">הכל</button>
+                    <button class="court-type-btn" id="feedback-filter-open-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('open')">פתוחות</button>
+                    <button class="court-type-btn" id="feedback-filter-done-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('done')">בוצעו</button>
+                    <button class="court-type-btn" id="feedback-filter-dismissed-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('dismissed')">התעלמתי</button>
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <select id="admin-feedback-sort" onchange="renderAdminFeedbackList()">
+                        <option value="date_desc">מיון: תאריך - חדש לישן</option>
+                        <option value="date_asc">מיון: תאריך - ישן לחדש</option>
+                    </select>
+                </div>
+                <div id="admin-feedback-list">
+                    <p style="color:var(--text-muted); font-size:0.85rem;">לחץ "רענן" כדי לטעון פניות.</p>
+                </div>
             </div>
 
             <button class="btn btn-secondary" style="width:100%; margin-top:20px;" onclick="showView('view-teams-list')">↩️ חזרה</button>
@@ -982,27 +1003,6 @@
                 <button class="btn" style="width:100%; margin-top:10px;" onclick="savePrepReminders()">💾 שמור תזכורות</button>
             </div>
 
-            <div id="admin-feedback-card" class="card" style="margin-bottom:15px; padding:14px; display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-                    <strong>💡 הצעות ומשוב שהתקבלו</strong>
-                    <button class="btn btn-secondary" style="padding:6px 12px; font-size:0.8rem;" onclick="loadAdminFeedback()">🔄 רענן</button>
-                </div>
-                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
-                    <button class="court-type-btn selected" id="feedback-filter-all-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('all')">הכל</button>
-                    <button class="court-type-btn" id="feedback-filter-open-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('open')">פתוחות</button>
-                    <button class="court-type-btn" id="feedback-filter-done-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('done')">בוצעו</button>
-                    <button class="court-type-btn" id="feedback-filter-dismissed-btn" style="flex:1; min-width:70px; font-size:0.78rem; padding:7px;" onclick="setFeedbackFilter('dismissed')">התעלמתי</button>
-                </div>
-                <div class="form-group" style="margin-bottom:10px;">
-                    <select id="admin-feedback-sort" onchange="renderAdminFeedbackList()">
-                        <option value="date_desc">מיון: תאריך - חדש לישן</option>
-                        <option value="date_asc">מיון: תאריך - ישן לחדש</option>
-                    </select>
-                </div>
-                <div id="admin-feedback-list">
-                    <p style="color:var(--text-muted); font-size:0.85rem;">לחץ "רענן" כדי לטעון פניות.</p>
-                </div>
-            </div>
         </div>
 
         <!-- ========================================== -->
@@ -2332,14 +2332,7 @@
             document.getElementById('user-email-badge').innerText = currentUser.email;
             document.getElementById('admin-role-badge').style.display = currentUserRole === 'admin' ? 'inline-block' : 'none';
             document.getElementById('header-user-info').style.display = 'flex';
-            document.getElementById('admin-teams-filter-menu').style.display = currentUserRole === 'admin' ? 'block' : 'none';
-            document.getElementById('admin-feedback-card').style.display = currentUserRole === 'admin' ? 'block' : 'none';
-            document.getElementById('admin-feedback-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
             document.getElementById('admin-panel-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
-            if (currentUserRole === 'admin') {
-                document.getElementById('admin-filter-mine-check').style.display = adminTeamsFilter === 'mine' ? 'inline' : 'none';
-                document.getElementById('admin-filter-all-check').style.display = adminTeamsFilter === 'all' ? 'inline' : 'none';
-            }
 
             subscribeToTeams();
             subscribeToDrillBank();
@@ -2526,35 +2519,45 @@
         }
 
         function openAdminFeedbackFromBell() {
-            showView('view-account-settings');
-            loadAdminFeedback();
+            openAdminPanel('feedback');
         }
 
         // --- מסך מנהל: קבוצות + טבלת הרשאות ---
-        function openAdminPanel() {
+        function toggleAdminMenu() {
+            const menu = document.getElementById('admin-submenu');
+            if (!menu) return;
+            menu.style.display = (menu.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        function openAdminPanel(tab) {
             if (currentUserRole !== 'admin') return;
-            switchAdminPanelTab('teams');
+            switchAdminPanelTab(tab || 'teams');
             showView('view-admin-panel');
         }
 
         function switchAdminPanelTab(tab) {
             const teamsBtn = document.getElementById('admin-panel-tab-teams-btn');
             const permBtn = document.getElementById('admin-panel-tab-permissions-btn');
+            const feedbackBtn = document.getElementById('admin-panel-tab-feedback-btn');
             const teamsContent = document.getElementById('admin-panel-tab-teams-content');
             const permContent = document.getElementById('admin-panel-tab-permissions-content');
+            const feedbackContent = document.getElementById('admin-panel-tab-feedback-content');
 
-            if (tab === 'teams') {
-                teamsBtn.classList.remove('btn-secondary');
-                permBtn.classList.add('btn-secondary');
-                teamsContent.style.display = 'block';
-                permContent.style.display = 'none';
-                renderAdminPanelTeamsList();
-            } else {
+            [teamsBtn, permBtn, feedbackBtn].forEach(btn => btn.classList.add('btn-secondary'));
+            [teamsContent, permContent, feedbackContent].forEach(el => el.style.display = 'none');
+
+            if (tab === 'permissions') {
                 permBtn.classList.remove('btn-secondary');
-                teamsBtn.classList.add('btn-secondary');
-                teamsContent.style.display = 'none';
                 permContent.style.display = 'block';
                 renderAdminPanelPermissionsList();
+            } else if (tab === 'feedback') {
+                feedbackBtn.classList.remove('btn-secondary');
+                feedbackContent.style.display = 'block';
+                loadAdminFeedback();
+            } else {
+                teamsBtn.classList.remove('btn-secondary');
+                teamsContent.style.display = 'block';
+                renderAdminPanelTeamsList();
             }
         }
 
@@ -2844,9 +2847,6 @@
         function setAdminTeamsFilter(mode) {
             if (currentUserRole !== 'admin') return;
             adminTeamsFilter = mode;
-
-            document.getElementById('admin-filter-mine-check').style.display = mode === 'mine' ? 'inline' : 'none';
-            document.getElementById('admin-filter-all-check').style.display = mode === 'all' ? 'inline' : 'none';
 
             logAppEvent('admin_teams_filter_change', { mode: mode });
             subscribeToTeams();
