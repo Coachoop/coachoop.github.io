@@ -2580,16 +2580,19 @@
                 const headerRow = `
                     <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; color:var(--text-muted); font-size:0.8rem; font-weight:bold;">
                         <span>משתמש</span>
-                        <span style="display:flex; gap:22px; flex-shrink:0;"><span>קבוצות</span><span>שחקנים</span></span>
+                        <span style="display:flex; flex-shrink:0;">
+                            <span style="width:60px; text-align:center;">קבוצות</span>
+                            <span style="width:60px; text-align:center;">שחקנים</span>
+                        </span>
                     </div>
                 `;
 
                 container.innerHTML = headerRow + emails.map(email => `
                     <div class="note-card" style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                         <strong style="overflow-wrap:break-word;">${escapeHtml(email)}</strong>
-                        <span style="display:flex; gap:22px; flex-shrink:0; font-size:0.95rem;">
-                            <span>${byUser[email].teamCount}</span>
-                            <span>${byUser[email].playerCount}</span>
+                        <span style="display:flex; flex-shrink:0; font-size:0.95rem;">
+                            <span style="width:60px; text-align:center;">${byUser[email].teamCount}</span>
+                            <span style="width:60px; text-align:center;">${byUser[email].playerCount}</span>
                         </span>
                     </div>
                 `).join('');
