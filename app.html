@@ -807,6 +807,39 @@
         </div>
 
         <!-- ========================================== -->
+        <!-- מסך הגדרות קבוצה: קישור לאיגוד + ייבוא לוח משחקים -->
+        <!-- ========================================== -->
+        <div id="view-team-settings" class="view">
+            <h2 id="team-settings-title">⚙️ הגדרות קבוצה</h2>
+
+            <div class="card">
+                <h3 style="color:var(--primary); margin-bottom:10px;">🔗 קישור לאתר האיגוד</h3>
+                <div class="form-group">
+                    <label>קישור לעמוד הקבוצה באתר האיגוד:</label>
+                    <input type="text" id="team-league-url-input" placeholder="https://ibasketball.co.il/team/...">
+                </div>
+                <div class="form-group">
+                    <label>שם הקבוצה כפי שמופיע באתר האיגוד (מדויק):</label>
+                    <input type="text" id="team-league-name-input" placeholder='למשל: בית"ר כפר יונה'>
+                </div>
+                <button class="btn" style="width:100%;" onclick="saveTeamLeagueSettings()">💾 שמור</button>
+            </div>
+
+            <div class="card">
+                <h3 style="color:var(--primary); margin-bottom:10px;">📥 ייבוא לוח משחקים מאקסל</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">
+                    בעמוד הקבוצה באתר האיגוד יש כפתור "יצוא לאקסל" - הורד אותו והעלה כאן.
+                    המערכת תזהה אוטומטית אילו משחקים שייכים לכם, לפי השם שהוגדר למעלה (חשוב לשמור אותו קודם).
+                </p>
+                <input type="file" id="import-games-file-input" accept=".xlsx,.xls" onchange="handleGamesFileSelected(event)">
+                <div id="import-games-preview" style="margin-top:10px;"></div>
+                <button id="import-games-confirm-btn" class="btn" style="display:none; width:100%; margin-top:10px;" onclick="confirmImportGames()">ייבא משחקים ללוח</button>
+            </div>
+
+            <button class="btn btn-secondary" style="width:100%; margin-top:10px;" onclick="showView('view-teams-list')">↩️ חזרה</button>
+        </div>
+
+        <!-- ========================================== -->
         <!-- מסך מנהל: קבוצות + טבלת הרשאות -->
         <!-- ========================================== -->
         <div id="view-admin-panel" class="view">
@@ -1296,7 +1329,10 @@
         <div id="view-players-list" class="view">
             <h2 id="players-list-title">סגל שחקנים</h2>
 
-            <button class="btn" style="margin-bottom: 10px;" onclick="openPlayerModal()">➕ הוסף שחקן חדש</button>
+            <div style="display:flex; gap:8px; margin-bottom:10px;">
+                <button class="btn" style="flex:1;" onclick="openPlayerModal()">➕ הוסף שחקן חדש</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="openImportPlayersModal()">📥 ייבוא מקובץ</button>
+            </div>
 
             <div id="player-form-card" class="card" style="display: none; margin-bottom: 15px;">
                 <h3 id="player-form-title">הוספת שחקן</h3>
@@ -1428,6 +1464,7 @@
          עובד ישירות מול גוגל בלי תלות ב-authDomain של Firebase, ולכן אמין גם כשהאתר מתארח
          בדומיין שונה (כמו GitHub Pages) מזה של פרויקט ה-Firebase. -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <script>
         // ========================================================
@@ -3047,7 +3084,10 @@
                             ${!isMine ? `<p class="team-owner-tag">👤 שייכת ל: ${team.ownerEmail || 'לא ידוע'}</p>` : ''}
                         </div>
                     </div>
-                    <button class="btn btn-secondary" onclick="event.stopPropagation(); deleteTeam('${team.id}')">מחק</button>
+                    <div style="display:flex; gap:8px; flex-shrink:0;">
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); openTeamSettings('${team.id}')" title="הגדרות קבוצה">⚙️</button>
+                        <button class="btn btn-secondary" onclick="event.stopPropagation(); deleteTeam('${team.id}')">מחק</button>
+                    </div>
                 `;
                 card.onclick = () => selectTeam(team.id);
                 container.appendChild(card);
@@ -3074,6 +3114,170 @@
             }
 
             openCalendarView();
+        }
+
+        // ============================================================
+        // מסך הגדרות קבוצה: קישור לאיגוד + ייבוא לוח משחקים מאקסל
+        // ============================================================
+        let teamSettingsId = null;
+        let pendingGamesImport = [];
+
+        function openTeamSettings(teamId) {
+            teamSettingsId = teamId;
+            const team = appState.teams.find(t => t.id === teamId);
+            if (!team) return;
+
+            document.getElementById('team-settings-title').innerText = `⚙️ הגדרות - ${team.name}`;
+            document.getElementById('team-league-url-input').value = team.leagueUrl || '';
+            document.getElementById('team-league-name-input').value = team.leagueTeamName || '';
+            document.getElementById('import-games-file-input').value = '';
+            document.getElementById('import-games-preview').innerHTML = '';
+            document.getElementById('import-games-confirm-btn').style.display = 'none';
+            pendingGamesImport = [];
+
+            showView('view-team-settings');
+        }
+
+        async function saveTeamLeagueSettings() {
+            const team = appState.teams.find(t => t.id === teamSettingsId);
+            if (!team) return;
+
+            team.leagueUrl = document.getElementById('team-league-url-input').value.trim();
+            team.leagueTeamName = document.getElementById('team-league-name-input').value.trim();
+
+            try {
+                await db.collection('teams').doc(team.id).set({
+                    leagueUrl: team.leagueUrl,
+                    leagueTeamName: team.leagueTeamName
+                }, { merge: true });
+                alert('נשמר!');
+            } catch (e) {
+                console.error('שגיאה בשמירת הגדרות איגוד:', e);
+                alert('שגיאה בשמירה. נסה שוב.');
+            }
+        }
+
+        function formatImportedDateDisplay(raw) {
+            const key = normalizeImportedDate(raw);
+            if (!key) return String(raw || '');
+            const parts = key.split('-');
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        function handleGamesFileSelected(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const team = appState.teams.find(t => t.id === teamSettingsId);
+            const teamNameOnSite = (team && team.leagueTeamName || '').trim();
+
+            if (!teamNameOnSite) {
+                alert('נא למלא קודם את "שם הקבוצה כפי שמופיע באתר האיגוד" ולשמור, כדי שנוכל לזהות אילו משחקים שייכים אליכם.');
+                event.target.value = '';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                    if (rows.length < 2) {
+                        document.getElementById('import-games-preview').innerHTML = '<p style="color:var(--danger);">הקובץ ריק.</p>';
+                        return;
+                    }
+
+                    const headers = rows[0].map(h => String(h || '').trim());
+                    const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+
+                    const dateCol = findCol(['תאריך']);
+                    const timeCol = findCol(['שעה']);
+                    const homeCol = findCol(['מארחת', 'בית']);
+                    const awayCol = findCol(['אורחת', 'חוץ']);
+                    const locationCol = findCol(['מיקום', 'אולם', 'כתובת']);
+
+                    if (dateCol === -1 || homeCol === -1 || awayCol === -1) {
+                        document.getElementById('import-games-preview').innerHTML = '<p style="color:var(--danger);">לא הצלחנו לזהות את העמודות בקובץ. ודא שזה קובץ "יצוא לאקסל" מאתר האיגוד.</p>';
+                        return;
+                    }
+
+                    const matches = rows.slice(1).filter(r => {
+                        const home = String(r[homeCol] || '');
+                        const away = String(r[awayCol] || '');
+                        return home.includes(teamNameOnSite) || teamNameOnSite.includes(home) ||
+                               away.includes(teamNameOnSite) || teamNameOnSite.includes(away);
+                    });
+
+                    pendingGamesImport = matches.map(r => {
+                        const home = String(r[homeCol] || '');
+                        const away = String(r[awayCol] || '');
+                        const isHome = home.includes(teamNameOnSite) || teamNameOnSite.includes(home);
+                        const opponent = (isHome ? away : home).trim();
+                        return {
+                            dateRaw: r[dateCol],
+                            time: timeCol !== -1 ? String(r[timeCol] || '').trim() : '',
+                            opponent: opponent,
+                            isHome: isHome,
+                            location: locationCol !== -1 ? String(r[locationCol] || '').trim() : ''
+                        };
+                    });
+
+                    const preview = document.getElementById('import-games-preview');
+                    if (pendingGamesImport.length === 0) {
+                        preview.innerHTML = '<p style="color:var(--danger);">לא נמצאו משחקים התואמים לשם הקבוצה שהוגדר. ודא שהשם מדויק כפי שהוא מופיע באתר.</p>';
+                        document.getElementById('import-games-confirm-btn').style.display = 'none';
+                        return;
+                    }
+
+                    preview.innerHTML = `<p style="color:#4ade80; font-weight:bold;">נמצאו ${pendingGamesImport.length} משחקים:</p>` +
+                        pendingGamesImport.map(g => `<div class="note-card" style="padding:8px; font-size:0.85rem;">${formatImportedDateDisplay(g.dateRaw)} ${escapeHtml(g.time)} - ${g.isHome ? '🏠' : '✈️'} נגד ${escapeHtml(g.opponent)}</div>`).join('');
+                    document.getElementById('import-games-confirm-btn').style.display = 'block';
+                } catch (err) {
+                    console.error('שגיאה בקריאת הקובץ:', err);
+                    document.getElementById('import-games-preview').innerHTML = '<p style="color:var(--danger);">שגיאה בקריאת הקובץ.</p>';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function confirmImportGames() {
+            const team = appState.teams.find(t => t.id === teamSettingsId);
+            if (!team) return;
+            if (!team.practices) team.practices = {};
+
+            let addedCount = 0;
+            pendingGamesImport.forEach(g => {
+                const dateKey = normalizeImportedDate(g.dateRaw);
+                if (!dateKey) return;
+
+                if (!team.practices[dateKey]) team.practices[dateKey] = [];
+                else if (!Array.isArray(team.practices[dateKey])) team.practices[dateKey] = [team.practices[dateKey]];
+
+                team.practices[dateKey].push({
+                    id: 'prc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+                    title: g.isHome ? `משחק בית נגד ${g.opponent}` : `משחק חוץ נגד ${g.opponent}`,
+                    time: g.time,
+                    endTime: '',
+                    location: g.location,
+                    notes: '',
+                    isGame: true,
+                    exercises: []
+                });
+                addedCount++;
+            });
+
+            try {
+                await db.collection('teams').doc(team.id).set({ practices: team.practices }, { merge: true });
+                alert(`${addedCount} משחקים יובאו בהצלחה ללוח השנה!`);
+                document.getElementById('import-games-confirm-btn').style.display = 'none';
+                pendingGamesImport = [];
+            } catch (e) {
+                console.error('שגיאה בייבוא משחקים:', e);
+                alert('שגיאה בשמירת המשחקים. נסה שוב.');
+            }
         }
 
         async function deleteTeam(teamId) {
@@ -6279,6 +6483,124 @@
             document.getElementById('player-form-card').style.display = 'none';
         }
 
+        // ============================================================
+        // ייבוא סגל שחקנים מקובץ אקסל
+        // ============================================================
+        let pendingPlayersImport = [];
+
+        function openImportPlayersModal() {
+            document.getElementById('import-players-file-input').value = '';
+            document.getElementById('import-players-preview').innerHTML = '';
+            document.getElementById('import-players-confirm-btn').style.display = 'none';
+            pendingPlayersImport = [];
+            document.getElementById('import-players-modal').style.display = 'flex';
+        }
+
+        function closeImportPlayersModal() {
+            document.getElementById('import-players-modal').style.display = 'none';
+        }
+
+        function downloadPlayersImportTemplate() {
+            const headers = ['שם שחקן', 'מספר', 'עמדה', 'תאריך לידה (YYYY-MM-DD)', 'טלפון שחקן', 'שם הורה 1', 'טלפון הורה 1', 'שם הורה 2', 'טלפון הורה 2'];
+            const sample = ['ישראל ישראלי', '7', 'רכז', '2013-05-14', '0501234567', 'דני ישראלי', '0521234567', 'רותי ישראלי', '0541234567'];
+            const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'שחקנים');
+            XLSX.writeFile(wb, 'תבנית_ייבוא_שחקנים.xlsx');
+        }
+
+        // ממיר תאריך שהגיע מאקסל (טקסט YYYY-MM-DD, או מספר סידורי של אקסל) לפורמט YYYY-MM-DD אחיד
+        function normalizeImportedDate(value) {
+            if (!value) return '';
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+            if (typeof value === 'number') {
+                const parsed = XLSX.SSF.parse_date_code(value);
+                if (parsed) {
+                    const mm = String(parsed.m).padStart(2, '0');
+                    const dd = String(parsed.d).padStart(2, '0');
+                    return `${parsed.y}-${mm}-${dd}`;
+                }
+            }
+            return '';
+        }
+
+        function handlePlayersFileSelected(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                    let dataRows = rows;
+                    if (rows.length && String(rows[0][0]).trim() === 'שם שחקן') {
+                        dataRows = rows.slice(1);
+                    }
+
+                    pendingPlayersImport = dataRows
+                        .filter(r => r[0] && String(r[0]).trim())
+                        .map(r => ({
+                            name: String(r[0] || '').trim(),
+                            number: String(r[1] || '').trim(),
+                            position: String(r[2] || '').trim(),
+                            birthDate: normalizeImportedDate(r[3]),
+                            phone: String(r[4] || '').trim(),
+                            parent1Name: String(r[5] || '').trim(),
+                            parent1Phone: String(r[6] || '').trim(),
+                            parent2Name: String(r[7] || '').trim(),
+                            parent2Phone: String(r[8] || '').trim()
+                        }));
+
+                    const preview = document.getElementById('import-players-preview');
+                    if (pendingPlayersImport.length === 0) {
+                        preview.innerHTML = '<p style="color:var(--danger);">לא נמצאו שורות תקינות בקובץ. ודא שהעמודה הראשונה (שם שחקן) מלאה.</p>';
+                        document.getElementById('import-players-confirm-btn').style.display = 'none';
+                        return;
+                    }
+
+                    preview.innerHTML = `<p style="color:#4ade80; font-weight:bold;">נמצאו ${pendingPlayersImport.length} שחקנים:</p>` +
+                        pendingPlayersImport.map(p => `<div class="note-card" style="padding:8px;">${escapeHtml(p.name)}${p.number ? ' (#' + escapeHtml(p.number) + ')' : ''}</div>`).join('');
+                    document.getElementById('import-players-confirm-btn').style.display = 'block';
+                } catch (err) {
+                    console.error('שגיאה בקריאת הקובץ:', err);
+                    document.getElementById('import-players-preview').innerHTML = '<p style="color:var(--danger);">שגיאה בקריאת הקובץ. ודא שזה קובץ אקסל (.xlsx) תקין.</p>';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function confirmImportPlayers() {
+            const team = getCurrentTeam();
+            if (!team) return;
+            if (!team.players) team.players = [];
+
+            pendingPlayersImport.forEach(p => {
+                team.players.push({
+                    id: 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+                    name: p.name,
+                    number: p.number,
+                    position: p.position,
+                    birthDate: p.birthDate,
+                    phone: p.phone,
+                    parent1Name: p.parent1Name,
+                    parent1Phone: p.parent1Phone,
+                    parent2Name: p.parent2Name,
+                    parent2Phone: p.parent2Phone,
+                    notes: []
+                });
+            });
+
+            const importedCount = pendingPlayersImport.length;
+            saveState();
+            closeImportPlayersModal();
+            renderPlayersList();
+            alert(`${importedCount} שחקנים יובאו בהצלחה!`);
+        }
+
         function savePlayer() {
             const name = document.getElementById('player-name').value.trim();
             const number = document.getElementById('player-number').value.trim();
@@ -6846,6 +7168,25 @@
             <div class="actions-row">
                 <button class="btn" style="flex:1;" onclick="confirmShareGames()">שתף</button>
                 <button class="btn btn-secondary" style="flex:1;" onclick="closeShareGamesModal()">ביטול</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- מודל ייבוא סגל שחקנים מקובץ אקסל -->
+    <!-- ========================================== -->
+    <div id="import-players-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center; padding:20px;">
+        <div class="card" style="max-width:450px; width:100%; max-height:85vh; overflow-y:auto;">
+            <h3 style="color:var(--primary); margin-bottom:10px;">📥 ייבוא סגל שחקנים מקובץ</h3>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">
+                העלה קובץ אקסל לפי התבנית - עמודות: שם שחקן | מספר | עמדה | תאריך לידה | טלפון שחקן | שם הורה 1 | טלפון הורה 1 | שם הורה 2 | טלפון הורה 2
+            </p>
+            <button class="btn btn-secondary" style="width:100%; margin-bottom:10px;" onclick="downloadPlayersImportTemplate()">📄 הורד תבנית לדוגמה</button>
+            <input type="file" id="import-players-file-input" accept=".xlsx,.xls,.csv" onchange="handlePlayersFileSelected(event)">
+            <div id="import-players-preview" style="margin-top:10px;"></div>
+            <div class="actions-row">
+                <button id="import-players-confirm-btn" class="btn" style="display:none; flex:1;" onclick="confirmImportPlayers()">ייבא את כולם</button>
+                <button class="btn btn-secondary" style="flex:1;" onclick="closeImportPlayersModal()">ביטול</button>
             </div>
         </div>
     </div>
