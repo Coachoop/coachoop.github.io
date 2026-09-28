@@ -1004,6 +1004,18 @@
                 <button class="btn" style="width:100%; margin-top:10px;" onclick="savePrepReminders()">💾 שמור תזכורות</button>
             </div>
 
+            <div class="card" style="margin-bottom:15px; padding:14px;">
+                <strong>📍 מיקומים שמורים</strong>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px; margin-bottom:10px;">
+                    מיקומים שיוצעו כהשלמה אוטומטית בשדה "מיקום" בכל אימון/משחק, בכל הקבוצות שלך. מיקום חדש שתקליד בטופס אימון יתווסף לכאן אוטומטית בפעם הבאה שתשמור.
+                </p>
+                <div id="saved-locations-list"></div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <input type="text" id="new-saved-location-input" placeholder="למשל: אולם הספורט העירוני" style="flex:1;">
+                    <button class="btn btn-secondary" style="flex-shrink:0;" onclick="addSavedLocation()">➕ הוסף</button>
+                </div>
+            </div>
+
         </div>
 
         <!-- ========================================== -->
@@ -1207,7 +1219,8 @@
                 </div>
                 <div class="form-group">
                     <label>מיקום האימון:</label>
-                    <input type="text" id="practice-location-input" placeholder="למשל: אולם הספורט העירוני">
+                    <input type="text" id="practice-location-input" list="saved-locations-datalist" placeholder="למשל: אולם הספורט העירוני">
+                    <datalist id="saved-locations-datalist"></datalist>
                 </div>
 
                 <div class="form-group">
@@ -1538,6 +1551,8 @@
         // תזכורות "הכן אימון" שהמאמן הגדיר לעצמו - מערך של מספרי דקות-לפני-האימון.
         // כבוי כברירת מחדל (מערך ריק) - כל מאמן מפעיל בעצמו אם רוצה
         let currentUserPrepReminders = [];
+        // מיקומים שמורים של המאמן - משותפים לכל הקבוצות שלו, מוצעים כהשלמה אוטומטית בשדה מיקום אימון
+        let currentUserSavedLocations = [];
         let unsubscribeTeamsListener = null;
         // עבור admin בלבד: 'mine' = רק הקבוצות שלי, 'all' = כל הקבוצות במערכת. ברירת מחדל: mine.
         let adminTeamsFilter = 'mine';
@@ -2114,6 +2129,71 @@
             }
         }
 
+        // ============================================================
+        // מיקומים שמורים - משותפים לכל הקבוצות של המאמן, מוצעים כהשלמה
+        // אוטומטית (datalist) בשדה המיקום של אימון/משחק.
+        // ============================================================
+        function renderSavedLocationsList() {
+            const container = document.getElementById('saved-locations-list');
+            if (!container) return;
+
+            if (currentUserSavedLocations.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">אין עדיין מיקומים שמורים.</p>';
+            } else {
+                container.innerHTML = currentUserSavedLocations.map((loc, idx) => `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--border-color);">
+                        <span style="overflow-wrap:break-word;">${escapeHtml(loc)}</span>
+                        <button class="btn btn-danger" style="padding:4px 10px; font-size:0.8rem; flex-shrink:0;" onclick="removeSavedLocationAt(${idx})">🗑️</button>
+                    </div>
+                `).join('');
+            }
+
+            // מרענן גם את ה-datalist שמוצע בשדה המיקום של האימון
+            const datalist = document.getElementById('saved-locations-datalist');
+            if (datalist) {
+                datalist.innerHTML = currentUserSavedLocations.map(loc => `<option value="${escapeHtml(loc)}"></option>`).join('');
+            }
+        }
+
+        async function persistSavedLocations() {
+            try {
+                await db.collection('users').doc(currentUser.uid).update({ savedLocations: currentUserSavedLocations });
+            } catch (e) {
+                console.error('שגיאה בשמירת מיקומים:', e);
+                alert('שגיאה בשמירת המיקום. נסה שוב.');
+            }
+        }
+
+        async function addSavedLocation() {
+            const input = document.getElementById('new-saved-location-input');
+            const value = input.value.trim();
+            if (!value) return;
+            if (currentUserSavedLocations.includes(value)) {
+                alert('המיקום הזה כבר שמור ברשימה.');
+                return;
+            }
+            currentUserSavedLocations.push(value);
+            input.value = '';
+            await persistSavedLocations();
+            renderSavedLocationsList();
+        }
+
+        async function removeSavedLocationAt(index) {
+            currentUserSavedLocations = currentUserSavedLocations.filter((_, i) => i !== index);
+            await persistSavedLocations();
+            renderSavedLocationsList();
+        }
+
+        // נקראת בכל שמירת אימון/משחק - אם המיקום שהוקלד חדש, נוסף אוטומטית לרשימה השמורה
+        function autoAddLocationIfNew(location) {
+            if (!location || !location.trim()) return;
+            const trimmed = location.trim();
+            if (currentUserSavedLocations.includes(trimmed)) return;
+            currentUserSavedLocations.push(trimmed);
+            persistSavedLocations();
+            renderSavedLocationsList();
+        }
+
         async function syncPracticeToGoogleCalendar(practice, dateKey) {
             if (!(await ensureGoogleCalendarConnected())) return 'not_connected';
             if (!practice.time) {
@@ -2309,15 +2389,18 @@
                     createdAt: Date.now(),
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                     sessionCount: 1,
-                    prepReminders: []
+                    prepReminders: [],
+                    savedLocations: []
                 });
                 currentUserRole = 'coach';
                 currentUserPlan = 'standard';
                 currentUserPrepReminders = [];
+                currentUserSavedLocations = [];
             } else {
                 currentUserRole = snap.data().role || 'coach';
                 currentUserPlan = snap.data().plan || 'standard';
                 currentUserPrepReminders = snap.data().prepReminders || [];
+                currentUserSavedLocations = snap.data().savedLocations || [];
                 userRef.update({
                     lastActive: firebase.firestore.FieldValue.serverTimestamp(),
                     sessionCount: firebase.firestore.FieldValue.increment(1)
@@ -2335,6 +2418,7 @@
             document.getElementById('header-user-info').style.display = 'flex';
             document.getElementById('admin-panel-menu-item').style.display = currentUserRole === 'admin' ? 'flex' : 'none';
 
+            renderSavedLocationsList();
             subscribeToTeams();
             subscribeToDrillBank();
             subscribeToFeedbackNotifications();
@@ -2904,7 +2988,7 @@
             if (viewId === 'view-teams-list') { renderTeamsList(); renderGlobalCalendar(); }
             if (viewId === 'view-calendar') renderCalendar();
             if (viewId === 'view-account-settings' || viewId === 'view-recurring') updateGoogleCalendarStatusUI();
-            if (viewId === 'view-account-settings') renderPrepRemindersSettings();
+            if (viewId === 'view-account-settings') { renderPrepRemindersSettings(); renderSavedLocationsList(); }
         }
 
         function goBack() {
@@ -5659,6 +5743,7 @@
             practice.time = newTime;
             practice.endTime = newEndTime;
             practice.location = document.getElementById('practice-location-input').value.trim();
+            autoAddLocationIfNew(practice.location);
             practice.notes = document.getElementById('practice-notes-input').value;
             practice.scheduleNotes = document.getElementById('practice-schedule-notes-input').value.trim();
             practice.scheduleNotesColor = document.getElementById('practice-schedule-notes-color').value;
