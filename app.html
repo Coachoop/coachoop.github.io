@@ -6773,7 +6773,6 @@
             }
             playersExportOrder = getNormalizedExportOrder();
             playersExportSelected = new Set(['name']); // ברירת מחדל: רק שם
-            document.getElementById('export-rows-sort').value = 'name';
             setPlayersExportFormat('xlsx');
             renderExportColumnsList();
             document.getElementById('export-players-modal').style.display = 'flex';
@@ -6862,24 +6861,6 @@
             return (v === undefined || v === null) ? '' : String(v);
         }
 
-        function getSortedPlayersForExport(team, sortMode) {
-            const list = [...team.players];
-            if (sortMode === 'number') {
-                list.sort((a, b) => {
-                    const na = parseInt(a.number, 10), nb = parseInt(b.number, 10);
-                    if (isNaN(na) && isNaN(nb)) return (a.name || '').localeCompare(b.name || '', 'he');
-                    if (isNaN(na)) return 1;
-                    if (isNaN(nb)) return -1;
-                    return na - nb;
-                });
-            } else if (sortMode === 'birthday') {
-                list.sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
-            } else {
-                list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
-            }
-            return list;
-        }
-
         function confirmExportPlayers() {
             const team = getCurrentTeam();
             if (!team || !team.players) return;
@@ -6892,7 +6873,8 @@
                 return;
             }
 
-            const players = getSortedPlayersForExport(team, document.getElementById('export-rows-sort').value);
+            // אותו סדר כמו במסך הסגל: לפי יום ההולדת הקרוב (שחקנים בלי תאריך לידה בסוף)
+            const players = [...team.players].sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
             const format = playersExportFormat;
             closeExportPlayersModal();
             logAppEvent('export_players', { format: format, columns: cols.length });
@@ -7635,15 +7617,6 @@
 
             <label style="display:block; margin-bottom:6px;">בחר עמודות (⠿ גרירה לשינוי הסדר - הסדר נשמר):</label>
             <div id="export-columns-list" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:12px;"></div>
-
-            <div class="form-group">
-                <label>סדר השורות (שחקנים):</label>
-                <select id="export-rows-sort">
-                    <option value="name">לפי שם</option>
-                    <option value="number">לפי מספר חולצה</option>
-                    <option value="birthday">לפי יום הולדת קרוב</option>
-                </select>
-            </div>
 
             <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
                 ⚠️ קובץ או תמונה עם ת.ז, טלפונים ותאריכי לידה עלולים להישלח הלאה (למשל לקבוצת וואטסאפ) - כדאי לבחור רק את מה שצריך.
