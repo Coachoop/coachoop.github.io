@@ -6773,6 +6773,7 @@
             }
             playersExportOrder = getNormalizedExportOrder();
             playersExportSelected = new Set(['name']); // ברירת מחדל: רק שם
+            document.getElementById('export-rows-sort').value = 'name';
             setPlayersExportFormat('xlsx');
             renderExportColumnsList();
             document.getElementById('export-players-modal').style.display = 'flex';
@@ -6861,6 +6862,24 @@
             return (v === undefined || v === null) ? '' : String(v);
         }
 
+        function getSortedPlayersForExport(team, sortMode) {
+            const list = [...team.players];
+            if (sortMode === 'number') {
+                list.sort((a, b) => {
+                    const na = parseInt(a.number, 10), nb = parseInt(b.number, 10);
+                    if (isNaN(na) && isNaN(nb)) return (a.name || '').localeCompare(b.name || '', 'he');
+                    if (isNaN(na)) return 1;
+                    if (isNaN(nb)) return -1;
+                    return na - nb;
+                });
+            } else if (sortMode === 'birthday') {
+                list.sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
+            } else {
+                list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'he'));
+            }
+            return list;
+        }
+
         function confirmExportPlayers() {
             const team = getCurrentTeam();
             if (!team || !team.players) return;
@@ -6873,8 +6892,7 @@
                 return;
             }
 
-            // אותו סדר כמו במסך הסגל: לפי יום ההולדת הקרוב (שחקנים בלי תאריך לידה בסוף)
-            const players = [...team.players].sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
+            const players = getSortedPlayersForExport(team, document.getElementById('export-rows-sort').value);
             const format = playersExportFormat;
             closeExportPlayersModal();
             logAppEvent('export_players', { format: format, columns: cols.length });
@@ -7167,12 +7185,16 @@
                 return;
             }
 
-            const sortedPlayers = [...team.players].sort((a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate));
+            const byBirthday = (a, b) => daysUntilNextBirthday(a.birthDate) - daysUntilNextBirthday(b.birthDate);
+            const activePlayers = team.players.filter(p => !p.archived).sort(byBirthday);
+            const archivedPlayers = team.players.filter(p => p.archived).sort(byBirthday);
+            const sortedPlayers = activePlayers.concat(archivedPlayers);
 
             sortedPlayers.forEach(p => {
                 const item = document.createElement('div');
                 item.className = 'player-item';
                 item.style.alignItems = 'flex-start';
+                if (p.archived) item.style.opacity = '0.5';
 
                 const phoneLine = p.phone
                     ? phoneRow('📱', p.phone, p.phone)
@@ -7201,7 +7223,6 @@
                         <h3 style="color:var(--primary);">${p.number ? '#' + p.number + ' - ' : ''}${p.name}</h3>
                         <div id="${detailsId}" class="player-details collapsed">
                             <p style="font-size:0.85rem; color:var(--text-muted);">${p.position ? 'עמדה: ' + p.position : ''}</p>
-                            ${p.idNumber ? `<p style="font-size:0.85rem; color:var(--text-muted);">🪪 ת.ז: ${escapeHtml(p.idNumber)}</p>` : ''}
                             ${p.birthDate ? `<p style="font-size:0.85rem; color:var(--text-muted);">🎂 ${formatBirthDateDisplay(p.birthDate)}</p>` : ''}
                             ${phoneLine}
                             ${parent1Line}
@@ -7210,9 +7231,14 @@
                         </div>
                         <button type="button" class="player-toggle-btn" style="display:none;" onclick="togglePlayerDetails('${p.id}', this)">הצג עוד ⌄</button>
                     </div>
-                    <div class="player-actions">
-                        <button class="btn btn-secondary" style="padding: 6px 10px; font-size:0.8rem;" onclick="openPlayerModal('${p.id}')">ערוך</button>
-                        <button class="btn btn-danger" style="padding: 6px 10px; font-size:0.8rem;" onclick="deletePlayer('${p.id}')">מחק</button>
+                    <div class="player-actions" style="flex-direction:column; align-items:flex-end; gap:6px;">
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-secondary" style="padding: 6px 10px; font-size:0.8rem;" onclick="openPlayerModal('${p.id}')">ערוך</button>
+                            <button class="btn btn-danger" style="padding: 6px 10px; font-size:0.8rem;" onclick="deletePlayer('${p.id}')">מחק</button>
+                        </div>
+                        ${p.archived
+                            ? `<button class="btn btn-secondary" style="padding: 4px 10px; font-size:0.75rem; opacity:0.7;" onclick="restorePlayer('${p.id}')">↩️ שחזור</button>`
+                            : `<button class="btn btn-secondary" style="padding: 4px 10px; font-size:0.75rem; opacity:0.7;" onclick="archivePlayer('${p.id}')">🗄️ ארכיון</button>`}
                     </div>
                 `;
                 container.appendChild(item);
@@ -7245,6 +7271,24 @@
                 saveState();
                 renderPlayersList();
             }
+        }
+
+        function archivePlayer(id) {
+            const team = getCurrentTeam();
+            const player = team.players.find(p => p.id === id);
+            if (!player) return;
+            player.archived = true;
+            saveState();
+            renderPlayersList();
+        }
+
+        function restorePlayer(id) {
+            const team = getCurrentTeam();
+            const player = team.players.find(p => p.id === id);
+            if (!player) return;
+            player.archived = false;
+            saveState();
+            renderPlayersList();
         }
 
         // --- 4. מודול הערות מרובות (עריכה + חיפוש בטווח תאריכים) ---
@@ -7617,6 +7661,15 @@
 
             <label style="display:block; margin-bottom:6px;">בחר עמודות (⠿ גרירה לשינוי הסדר - הסדר נשמר):</label>
             <div id="export-columns-list" style="border:1px solid var(--border-color); border-radius:8px; margin-bottom:12px;"></div>
+
+            <div class="form-group">
+                <label>סדר השורות (שחקנים):</label>
+                <select id="export-rows-sort">
+                    <option value="name">לפי שם</option>
+                    <option value="number">לפי מספר חולצה</option>
+                    <option value="birthday">לפי יום הולדת קרוב</option>
+                </select>
+            </div>
 
             <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:12px;">
                 ⚠️ קובץ או תמונה עם ת.ז, טלפונים ותאריכי לידה עלולים להישלח הלאה (למשל לקבוצת וואטסאפ) - כדאי לבחור רק את מה שצריך.
